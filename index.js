@@ -4,6 +4,8 @@ const fs = require('fs');
 const moment = require('moment');
 const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
+const {convert} = require('./convert.js');
+const {chunk} = require('./util.js');
 
 
 const BASE_URL = "https://2ch.hk";
@@ -35,41 +37,30 @@ request(`${BASE_URL}${threadId}`, async function (error, response, body) {
         mediaLinks.push(link.getAttribute('href'));
     });
     console.log(`Found ${mediaLinks.length} media files`);
-    await Promise.all(mediaLinks.map(link => {
-        return new Promise((resolve, reject) => {
-            let fileName = link.slice(17);
-            let filePath = `${memeFolder}/${fileName}`;
-            let file = fs.createWriteStream(filePath);
-            request(BASE_URL + link)
-            .pipe(file)
-            .on('finish', () => {
-                console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
-                resolve();
+    const chunkedMedia = chunk(mediaLinks, 10);
+    for (const links of chunkedMedia) {
+        await Promise.all(links.map(link => {
+            return new Promise((resolve, reject) => {
+                let fileName = link.slice(17);
+                let filePath = `${memeFolder}/${fileName}`;
+                let file = fs.createWriteStream(filePath);
+                request(BASE_URL + link)
+                .pipe(file)
+                .on('finish', async () => {
+                    console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
+                    resolve(fileName);
+                })
+                .on('error', (error) =>{
+                    console.log(error);
+                })
             })
-            .on('error', (error) =>{
-                console.log(error);
+            .then(async (fileName) => {
+                if(fileName.slice(-4) == 'webm') {
+                    return await convert(fileName, memeFolder);
+                }
+                return;
             })
-        })
-    }))
-    // .then(res => {
-    //     fs.readdir(memeFolder, (err, files) => {
-    //         files.forEach(file => {
-    //             if(file.slice(-4) == 'webm') {
-    //                 ffmpeg(`${memeFolder}/${file}`).output(`${memeFolder}/${file.slice(0, -5)}.mp4`)
-    //                     .on('error', (error) => {
-    //                         console.log(`Something really weird happened: ${error}`);
-    //                     })
-    //                     .on('end', () => {
-    //                         console.log(`Converted ${file} into ${file.slice(0, -5)}.mp4`);
-    //                         fs.unlinkSync(`${memeFolder}/${file}`);
-    //                         console.log(`Removed file ${file}`);
-    //                     })
-    //                     .run();
-    //             }
-    //         });
-    //     });
-    // })
-    .then(() => {
-        console.log("Finished after %ds", (process.hrtime(hrstart))[0]);
-    });
+        }));
+    }
+    console.log("Finished after %ds", (process.hrtime(hrstart))[0]);
 });
