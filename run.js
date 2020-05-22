@@ -1,4 +1,4 @@
-const {downloadMemes} = require('./donwloadMemes.js');
+const {downloadMemes} = require('./2chClient.js');
 const {convert} = require('./convert.js');
 const moment = require('moment');
 const fs = require('fs');
