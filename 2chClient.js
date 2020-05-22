@@ -66,33 +66,62 @@ module.exports = {
         })
         
     },
-    downloadMemes: async (mediaLinks) => {
+    // downloadMemes: async (mediaLinks) => {
+    //     // create folder for memes
+    //     const date = moment().format('YYYY-MM-DD');
+    //     const memeFolder = date;
+    //     console.log(`Downloading memes for ${date}`);
+        
+    //     if (!fs.existsSync(memeFolder)) {
+    //         fs.mkdirSync(memeFolder);
+    //     }
+    //     return new Promise((resolve, reject) => {
+    //         return Promise.map(mediaLinks, link => {
+    //             let fileName = link.slice(-19);
+    //             let filePath = `${memeFolder}/${fileName}`;
+    //             let file = fs.createWriteStream(filePath);
+    //             return new Promise((resolve, reject) => {
+    //                 return request(link)
+    //                     .pipe(file)
+    //                     .on('error', (error) => {
+    //                         console.log(error);
+    //                         return reject(error);
+    //                     })
+    //                     .on('finish', async () => {
+    //                         console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
+    //                         return resolve();
+    //                     });
+    //                 });
+    //             }, {concurrency: 3}).then(() => resolve({filePath: filePath, fileName: fileName}), (error) => reject(error));
+    //     });
+    // }
+
+    
+    /**
+     * @param {string} link 
+     * 
+     * @return {Promise} {filePath: string, fileName: string}
+     */
+    downloadMemes: async (link) => {
         // create folder for memes
         const date = moment().format('YYYY-MM-DD');
-        const memeFolder = date;
-        console.log(`Downloading memes for ${date}`);
-        
+        const memeFolder = date;        
         if (!fs.existsSync(memeFolder)) {
             fs.mkdirSync(memeFolder);
         }
         return new Promise((resolve, reject) => {
-            return Promise.map(mediaLinks, link => {
                 let fileName = link.slice(-19);
                 let filePath = `${memeFolder}/${fileName}`;
                 let file = fs.createWriteStream(filePath);
-                return new Promise((resolve, reject) => {
-                    return request(link)
-                        .pipe(file)
-                        .on('error', (error) => {
-                            console.log(error);
-                            return reject(error);
-                        })
-                        .on('finish', async () => {
-                            console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
-                            return resolve();
-                        });
+                return request(link)
+                    .pipe(file)
+                    .on('error', (error) => {
+                        console.log(error);
+                        return reject(error);
+                    })
+                    .on('finish', async () => {
+                        console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
+                        return resolve({path: filePath, name: fileName});
                     });
-                }, {concurrency: 3}).then(() => resolve({filePath: filePath, fileName: fileName}), (error) => reject(error));
-        });
-    }
+    })},
 }

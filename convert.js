@@ -11,10 +11,17 @@ function checkEmpty(filePath) {
 }
 
 module.exports = {
+    /**
+     * @param  {string} filePath
+     * @param  {string} fileName
+     * 
+     * @return {string} filePath
+     */
     convert: (filePath, fileName) => {
         return new Promise((resolve, reject) => {
             console.log(`Converting file ${fileName}`)
             const newFileName = `${fileName.slice(0, -5)}.mp4`;
+            const newFilePath = `${filePath.slice(0, -5)}.mp4`;
             ffmpeg(filePath).output(`${filePath.slice(0,-5)}.mp4`)
                 .on('error', (error) => {
                     return reject(error.message)
@@ -23,7 +30,7 @@ module.exports = {
                     console.log(`Converted ${fileName} into ${newFileName}`);
                     fs.unlinkSync(filePath);
                     console.log(`Removed file ${fileName}`);
-                    return resolve(newFileName);
+                    return resolve(newFilePath);
                 })
                 .run();
             }).catch(err => console.log(err));

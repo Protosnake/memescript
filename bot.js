@@ -26,6 +26,3 @@ const moment = require('moment');
 //     }, {concurrency: 1})
 // })
 
-
-
-// https://dev.to/django_stars/how-to-create-and-deploy-a-telegram-bot-37lj
