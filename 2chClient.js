@@ -6,8 +6,9 @@ const fs = Promise.promisifyAll(require('fs'));
 const moment = require('moment');
 const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
-const {convert} = require('./convert.js');
 const csv = require('csv-parser');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const csvWriter = require('csv-write-stream')
 
 const BASE_URL = "https://2ch.hk";
 const linkSelector = 'figcaption a.desktop';
@@ -45,6 +46,49 @@ module.exports = {
             })
             .on('end', () => resolve(threadIds))
             .on('error', (error) => reject(error)));
+    },
+    getFailedVideos: () => {
+        const csvPath = __dirname + '/failed.csv';
+        const newCsvPath = __dirname + '/retriedFails.csv'
+        const failedVideos = {
+            links: [],
+            files: [],
+        };
+        return new Promise((resolve, reject) => fs.createReadStream(csvPath)
+            .pipe(csv())
+            .on('data', (row) => {
+                if (row.file.includes('https')) {
+                    failedVideos.links.push(row.file);
+                } else {
+                    failedVideos.files.push(row.file);
+                }
+            })
+            .on('end', () => {
+                if (fs.existsSync(newCsvPath)) {
+                    fs.unlinkSync(newCsvPath);
+                }
+                if (fs.existsSync(csvPath)) {
+                    fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
+                    fs.unlinkSync(csvPath);
+                }
+                return resolve(failedVideos)
+            })
+            .on('error', (error) => reject(error)));
+    },
+    logFailure: (file, reason) => {
+        const finalPathFile = './failed.csv';
+        if (fs.existsSync(finalPathFile)) {
+            fs.unlinkSync(finalPathFile);
+        }
+        // fs.writeFileSync(finalPathFile);
+        writer = csvWriter({ headers: ["file", "reason"]});
+        writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
+        writer.write({
+            file: file,
+            reason: reason,
+        });
+        writer.end();
+        console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
     },
     getMediaLinks: (threadIds) => {
         const mediaLinks = [];

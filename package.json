@@ -12,6 +12,8 @@
   "dependencies": {
     "bluebird": "^3.7.2",
     "csv-parser": "^2.3.2",
+    "csv-write-stream": "^2.0.0",
+    "csv-writer": "^1.6.0",
     "fluent-ffmpeg": "^2.1.2",
     "lodash": "^4.17.15",
     "moment": "^2.25.3",

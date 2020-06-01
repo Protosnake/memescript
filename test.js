@@ -1,90 +1,99 @@
-const {getThreadIds, getMediaLinks, filterLinks, downloadMemes} = require('./2chClient.js');
-const {convert} = require('./convert.js')
+const {getThreadIds, getMediaLinks, filterLinks, downloadMemes, getFailedVideos, logFailure} = require('./2chClient.js');
+const {convert} = require('./convert.js');
+const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
-const { Telegraf } = require('telegraf')
 const TOKEN = '1281981211:AAF1aGYUggPy3OKWBqfd4FcBo_jxhNmw3Ek';
-const CHANNEL_ID = '-1001220573893';
-const bot = new Telegraf(TOKEN);
+const CHANNEL_ID = CHANNEL.test;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
 const moment = require('moment');
-const sleep = require('sleep-promise');
+const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH9YIR85w)';
 
 
 const hrstart = process.hrtime();
 
+async function sendMessage(text, time = 0) {
+    return Promise.delay(time)
+        .then(() => telegram.sendMessage(CHANNEL_ID, text))
+        .catch(async error => {
+            if (error.response.error_code === 429) {
+                console.log(error.response.description);
+                let retry_after = error.response.parameters.retry_after;
+                await sendMessage(text, retry_after * 1000);
+            } else {
+                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
+            }
+        });
+}
+
+
 // video can be link or a buffer
 async function sendVideo(video, time = 0) {
-    console.log(`Uploading ${typeof video === 'string' ? video : video.source + ' a local file'}`);
-    if (time > 0) {
-        console.log(`Waiting ${time/1000}s`)
-    }
-    return Promise.delay(time).then(() => telegram.sendVideo(CHANNEL_ID, video, {supports_streaming: true})
+    return Promise.delay(time).then(() => telegram.sendVideo(CHANNEL_ID, video, {supports_streaming: true, caption})
+        .then(() => console.log("\x1b[32m%s\x1b[0m" ,`${typeof video === 'object' ? 'A local file ' + video.source.path : video} uploaded successfully`))
         .catch(async error => {
-            if (error.response.error_code === 400) {
-                let failedVideo = video;
-                if(typeof video === 'object') {
-                    failedVideo = video.source;
-                    console.log(`Failed to upload ${failedVideo} a local file. Logged to failed.txt`);
-                } else {
-                    console.log(`Failed to upload ${error.on.payload.video} by link. Logged to failed.txt`);
-                }
-                fs.appendFileSync('./failed.txt', failedVideo + '\n');
-            } else if (error.response.error_code === 429) {
+            if (error.response.error_code === 429) {
                 console.log(error.response.description);
+                let retry_after = error.response.parameters.retry_after;
+                await sendVideo(video, retry_after * 1000);
             } else {
-                console.log(error);
-            }
-            if (error.response.error_code === 429) {
-                await sendVideo(video, error.response.parameters.retry_after * 1000);
+                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
+                logFailure(typeof video === 'object' ? JSON.stringify(video.source.path) : video, ` ${error.response.error_code}: ${error.description}`);
             }
         }));
 }
-
-async function sendPhoto(link, time = 0) {
-    return Promise.delay(time).then(() => telegram.sendPhoto(CHANNEL_ID, link, {supports_streaming: true})
-        .catch(async error => {
-            console.log(error.response.description);
-            if (error.response.error_code === 400) {
-                fs.appendFileSync('./failed.txt', link + '\n');
-                console.log(`Failed to upload ${link} image. Logged to failed.txt`);
-            }
-            if (error.response.error_code === 429) {
-                await sendVideo(link, error.response.parameters.retry_after * 1000);
-            }
-        }));
-}
-
-
 function run() {
-    const date = moment().format('YYYY-MM-DD');
-    const dir = `${__dirname}/${date}/`
+    let counter = 0;
+    const date = moment().format('MM-DD');
+    const dir = `${__dirname}/${date}/`;
+    let interval;
     return getThreadIds()
         .then(threadIds => getMediaLinks(threadIds))
         .then(mediaLinks => filterLinks(mediaLinks))
         .then(async links => {
             const tasks = [];
-            await telegram.sendMessage(CHANNEL_ID, `Мемы за ${date}, ебана`)
+            await sendMessage(`мемы за ${date}`);
+            interval = setInterval(async () => {
+                counter++;
+                await sendMessage(`${date} ${counter}`)
+            }, 600000) // 600000
             tasks.push(new Promise((resolve, reject) => {
-                return Promise.map(links.webm, link => {
+                return Promise.map(links.webm.slice(-5), link => {
                     return downloadMemes(link)
                         .then((file) => convert(file.path, file.name))
                         .then((filePath) => sendVideo({source: filePath}))
+                        .catch(error => console.log(error))
                 }, {concurrency: 2})
                     .then(() => resolve(), error => reject(error));;
             }));
             tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(links.mp4, link => sendVideo(link), {concurrency: 1})
-                    .then(() => resolve(), error => reject(error));
-            }))
-            tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(links.img, link => sendPhoto(link), {concurrency: 1})
+                return Promise.map(links.mp4.slice(-5), link => sendVideo(link), {concurrency: 4})
                     .then(() => resolve(), error => reject(error));
             }))
             return Promise.all(tasks);
         })
-        .then((res) => console.log("Finished after %ds", (process.hrtime(hrstart))[0]));
+        .then(() => getFailedVideos())
+        .then((failedVideos) => {
+            const tasks = [];
+            tasks.push(new Promise((resolve, reject) => {
+                return Promise.map(failedVideos.files.slice(-5), link => {
+                    return downloadMemes(link)
+                        .then((file) => convert(file.path, file.name))
+                        .then((filePath) => sendVideo({source: filePath}))
+                        .catch(error => console.log(error))
+                }, {concurrency: 2})
+                    .then(() => resolve(), error => reject(error));;
+            }));
+            tasks.push(new Promise(async (resolve, reject) => {
+                return Promise.map(failedVideos.links.slice(-5), link => sendVideo(link), {concurrency: 4})
+                    .then(() => resolve(), error => reject(error));
+            }))
+            return Promise.all(tasks);
+        })
+        .then((res) => {
+            clearInterval(interval);
+            console.log("Finished after %ds", (process.hrtime(hrstart))[0])
+        });
 }
-
 run();

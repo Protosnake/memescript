@@ -24,6 +24,7 @@ module.exports = {
             const newFilePath = `${filePath.slice(0, -5)}.mp4`;
             ffmpeg(filePath).output(`${filePath.slice(0,-5)}.mp4`)
                 .on('error', (error) => {
+                    fs.appendFileSync('./failed.txt', filePath + '\n');
                     return reject(error.message)
                 })
                 .on('end', () => {
