@@ -76,18 +76,31 @@ module.exports = {
             .on('error', (error) => reject(error)));
     },
     logFailure: (file, reason) => {
-        const finalPathFile = './failed.csv';
-        if (fs.existsSync(finalPathFile)) {
-            fs.unlinkSync(finalPathFile);
-        }
+        // const finalPathFile = './failed.csv';
+        // const writer = csvWriter();
+        // if (!fs.existsSync(finalPathFile)) {
+        //     writer = csvWriter({ headers: ["file", "reason"]});
+        // } else {
+        //     writer = csvWriter({sendHeaders: false});
+        // }   
+        // writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
+        // writer.write({
+        //     file:file,
+        //     reason: reason,
+        // });
+        // writer.end();
+        // if (fs.existsSync(finalPathFile)) {
+        //     fs.unlinkSync(finalPathFile);
+        // }
+        // // fs.writeFileSync(finalPathFile);
         // fs.writeFileSync(finalPathFile);
-        writer = csvWriter({ headers: ["file", "reason"]});
-        writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
-        writer.write({
-            file: file,
-            reason: reason,
-        });
-        writer.end();
+        // writer = csvWriter({ headers: ["file", "reason"]});
+        // writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
+        // writer.write({
+        //     file: file,
+        //     reason: reason,
+        // });
+        // writer.end();
         console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
     },
     getMediaLinks: (threadIds) => {
