@@ -1,4 +1,12 @@
-const {getThreadIds, getMediaLinks, filterLinks, downloadMemes, getFailedVideos, logFailure} = require('./2chClient.js');
+const {
+    getThreadIds, 
+    getThreadLinks, 
+    filterLinks, 
+    downloadMemes, 
+    getFailedVideos, 
+    logFailure,
+    clearFailedLog
+    } = require('./2chClient.js');
 const {convert} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
@@ -45,33 +53,46 @@ async function sendVideo(video, time = 0) {
 }
 function run() {
     let counter = 0;
-    const date = moment().format('MM-DD');
+    const date = moment().format('DD-MM');
     const dir = `${__dirname}/${date}/`;
-    let interval;
+    let interval;ппше 
+    clearFailedLog();
     return getThreadIds()
-        .then(threadIds => getMediaLinks(threadIds))
-        .then(mediaLinks => filterLinks(mediaLinks))
-        .then(async links => {
-            const tasks = [];
+        .then(threadIds => getThreadLinks(threadIds))
+        // .then(mediaLinks => filterLinks(mediaLinks))
+        .then(async threadLinks => {
+            // threadLinks = {"/b/thread123123.html": ["/b/video.mp4", "/b/video2.mp4"]}
+            
+            // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
+            
+            // постим сообщение каждые 15 мин для навигации
             interval = setInterval(async () => {
                 counter++;
                 await sendMessage(`${date} ${counter}`)
             }, 600000) // 600000
-            tasks.push(new Promise((resolve, reject) => {
-                return Promise.map(links.webm.slice(-10), link => {
-                    return downloadMemes(link)
-                        .then((file) => convert(file.path, file.name))
-                        .then((filePath) => sendVideo({source: filePath}))
-                        .catch(error => console.log(error))
-                }, {concurrency: 2})
-                    .then(() => resolve(), error => reject(error));;
-            }));
-            tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(links.mp4.slice(-10), link => sendVideo(link), {concurrency: 4})
-                    .then(() => resolve(), error => reject(error));
-            }))
-            return Promise.all(tasks);
+
+            // льем каждый тред отдельно
+            for (const threadId in threadLinks) {
+                await sendMessage(`Тред номер ${threadId}`);
+                let filteredLinks = filterLinks(threadLinks[threadId]);
+                let tasks = [];
+            
+                tasks.push(new Promise((resolve, reject) => {
+                    return Promise.map(filteredLinks.webm.slice(-1), link => {
+                        return downloadMemes(link)
+                            .then((file) => convert(file.path, file.name))
+                            .then((filePath) => sendVideo({source: filePath}))
+                            .catch(error => console.log(error))
+                    }, {concurrency: 2})
+                        .then(() => resolve(), error => reject(error));;
+                }));
+                tasks.push(new Promise(async (resolve, reject) => {
+                    return Promise.map(filteredLinks.mp4.slice(-2), link => sendVideo(link + "q"), {concurrency: 4})
+                        .then(() => resolve(), error => reject(error));
+                }))
+                await Promise.all(tasks);
+            }
         })
         .then(() => getFailedVideos())
         .then((failedVideos) => {

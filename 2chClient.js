@@ -64,96 +64,51 @@ module.exports = {
                 }
             })
             .on('end', () => {
-                if (fs.existsSync(newCsvPath)) {
-                    fs.unlinkSync(newCsvPath);
-                }
-                if (fs.existsSync(csvPath)) {
-                    fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
-                    fs.unlinkSync(csvPath);
-                }
+                fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
                 return resolve(failedVideos)
             })
             .on('error', (error) => reject(error)));
     },
     logFailure: (file, reason) => {
-        // const finalPathFile = './failed.csv';
-        // const writer = csvWriter();
-        // if (!fs.existsSync(finalPathFile)) {
-        //     writer = csvWriter({ headers: ["file", "reason"]});
-        // } else {
-        //     writer = csvWriter({sendHeaders: false});
-        // }   
-        // writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
-        // writer.write({
-        //     file:file,
-        //     reason: reason,
-        // });
-        // writer.end();
-        // if (fs.existsSync(finalPathFile)) {
-        //     fs.unlinkSync(finalPathFile);
-        // }
-        // // fs.writeFileSync(finalPathFile);
-        // fs.writeFileSync(finalPathFile);
-        // writer = csvWriter({ headers: ["file", "reason"]});
-        // writer.pipe(fs.createWriteStream(finalPathFile, {flags: 'a'}));
-        // writer.write({
-        //     file: file,
-        //     reason: reason,
-        // });
-        // writer.end();
+        const path = './failed.csv';
+        let writer = csvWriter({sendHeaders: fs.readFileSync(path).length === 0});
+        writer.pipe(fs.createWriteStream(path, {flags: 'a'}));
+        writer.write({
+            file:file,
+            reason: reason,
+        });
+        writer.end();
         console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
     },
-    getMediaLinks: (threadIds) => {
-        const mediaLinks = [];
+    getThreadLinks: (threadIds) => {
+        const mediaLinks = {};
         return new Promise((resolve, reject) => {
             return Promise.all(threadIds.map((threadId) => {
+                mediaLinks[threadId] = [];
                 return request(`${BASE_URL}${threadId}`).then((res) => {
                     var root = HTMLParser.parse(res);
                     var links = root.querySelectorAll(linkSelector);
                     links.forEach(link => {
                         // mediaLinks.push(link.getAttribute('href'));
-                        mediaLinks.push(`${BASE_URL}${link.getAttribute('href')}`);
+                        mediaLinks[threadId].push(`${BASE_URL}${link.getAttribute('href')}`);
                     });
                 },
                 err => console.log(`Could find media files in ${threadId} thred due to ${err.statusCode} error code`));
             })).then(() => {
-                console.log(`Found ${mediaLinks.length} media files`);
-                resolve(mediaLinks);
+                let total = 0;
+                for (let i in mediaLinks) {
+                    total = total + mediaLinks[i].length;
+                }
+                console.log(`Found ${total} media files`);
+                return resolve(mediaLinks);
             }, error => reject(error));
         })
-        
     },
-    // downloadMemes: async (mediaLinks) => {
-    //     // create folder for memes
-    //     const date = moment().format('YYYY-MM-DD');
-    //     const memeFolder = date;
-    //     console.log(`Downloading memes for ${date}`);
-        
-    //     if (!fs.existsSync(memeFolder)) {
-    //         fs.mkdirSync(memeFolder);
-    //     }
-    //     return new Promise((resolve, reject) => {
-    //         return Promise.map(mediaLinks, link => {
-    //             let fileName = link.slice(-19);
-    //             let filePath = `${memeFolder}/${fileName}`;
-    //             let file = fs.createWriteStream(filePath);
-    //             return new Promise((resolve, reject) => {
-    //                 return request(link)
-    //                     .pipe(file)
-    //                     .on('error', (error) => {
-    //                         console.log(error);
-    //                         return reject(error);
-    //                     })
-    //                     .on('finish', async () => {
-    //                         console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
-    //                         return resolve();
-    //                     });
-    //                 });
-    //             }, {concurrency: 3}).then(() => resolve({filePath: filePath, fileName: fileName}), (error) => reject(error));
-    //     });
-    // }
-
-    
+    clearFailedLog: () => {
+        const failedLog = __dirname + '/failed.csv';
+        fs.truncate(failedLog, 0, error => null ? console.log(error) : "");
+        console.log("Cleared failed log file");
+    },
     /**
      * @param {string} link 
      * 
