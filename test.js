@@ -74,7 +74,7 @@ function run() {
 
             // льем каждый тред отдельно
             for (const threadId in threadLinks) {
-                await sendMessage(`Тред номер ${threadId}`);
+                await sendMessage(`Тред номер ${threadId} за ${date}`);
                 let filteredLinks = filterLinks(threadLinks[threadId]);
                 let tasks = [];
             

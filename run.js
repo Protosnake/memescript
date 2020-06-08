@@ -47,13 +47,13 @@ async function sendVideo(video, time = 0) {
                 await sendVideo(video, retry_after * 1000);
             } else {
                 console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
-                logFailure(typeof video === 'object' ? JSON.stringify(video.source.path) : video, ` ${error.response.error_code}: ${error.description}`);
+                logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
             }
         }));
 }
 function run() {
     let counter = 0;
-    const date = moment().format('MM-DD');
+    const date = moment().format('DD-MM');
     let interval;
     clearFailedLog();
     return getThreadIds()
@@ -70,7 +70,8 @@ function run() {
 
             // льем каждый тред отдельно
             for (const threadId in threadLinks) {
-                await sendMessage(`Тред номер ${threadId}`);
+                await sendMessage(`Тред номер ${threadId} за ${date}`);
+                console.log(`Uploading thread ${threadId}`);
                 let filteredLinks = filterLinks(threadLinks[threadId]);
                 let tasks = [];
             
@@ -80,11 +81,11 @@ function run() {
                             .then((file) => convert(file.path, file.name))
                             .then((filePath) => sendVideo({source: filePath}))
                             .catch(error => console.log(error))
-                    }, {concurrency: 2})
+                    }, {concurrency: 5})
                         .then(() => resolve(), error => reject(error));;
                 }));
                 tasks.push(new Promise(async (resolve, reject) => {
-                    return Promise.map(filteredLinks.mp4, link => sendVideo(link), {concurrency: 4})
+                    return Promise.map(filteredLinks.mp4, link => sendVideo(link), {concurrency: 10})
                         .then(() => resolve(), error => reject(error));
                 }))
                 await Promise.all(tasks);
@@ -99,11 +100,11 @@ function run() {
                         .then((file) => convert(file.path, file.name))
                         .then((filePath) => sendVideo({source: filePath}))
                         .catch(error => console.log(error))
-                }, {concurrency: 2})
+                }, {concurrency: 5})
                     .then(() => resolve(), error => reject(error));;
             }));
             tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(failedVideos.links, link => sendVideo(link), {concurrency: 4})
+                return Promise.map(failedVideos.links, link => sendVideo(link), {concurrency: 10})
                     .then(() => resolve(), error => reject(error));
             }))
             return Promise.all(tasks);
