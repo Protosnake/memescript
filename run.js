@@ -1,18 +1,19 @@
 const {
-    getThreadIds, 
+    getMediaLinks, 
     getThreadLinks, 
     filterLinks, 
     downloadMemes, 
     getFailedVideos, 
     logFailure,
-    clearFailedLog
+    clearFailedLog,
+    checkFileSize
     } = require('./2chClient.js');
 const {convert} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const TOKEN = '1281981211:AAF1aGYUggPy3OKWBqfd4FcBo_jxhNmw3Ek';
-const CHANNEL_ID = CHANNEL.id;
+const CHANNEL_ID = CHANNEL.test;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
 const moment = require('moment');
@@ -35,7 +36,6 @@ async function sendMessage(text, time = 0) {
         });
 }
 
-
 // video can be link or a buffer
 async function sendVideo(video, time = 0) {
     return Promise.delay(time).then(() => telegram.sendVideo(CHANNEL_ID, video, {supports_streaming: true, caption})
@@ -56,9 +56,9 @@ function run() {
     const date = moment().format('DD-MM');
     let interval;
     clearFailedLog();
-    return getThreadIds()
-        .then(threadIds => getThreadLinks(threadIds))
-        .then(async threadLinks => {            
+    return getThreadLinks()
+        .then(threadLinks => getMediaLinks(threadLinks))
+        .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
             
@@ -69,14 +69,15 @@ function run() {
             }, 600000) // 600000
 
             // льем каждый тред отдельно
-            for (const threadId in threadLinks) {
+            for (const threadId in mediaLinks) {
                 await sendMessage(`Тред номер ${threadId} за ${date}`);
                 console.log(`Uploading thread ${threadId}`);
-                let filteredLinks = filterLinks(threadLinks[threadId]);
+                let filteredLinks = filterLinks(mediaLinks[threadId]);
                 let tasks = [];
             
                 tasks.push(new Promise((resolve, reject) => {
-                    return Promise.map(filteredLinks.webm, link => {
+                    return Promise.map(filteredLinks.webm, async link => {
+                        if (await checkFileSize(link)) return resolve();
                         return downloadMemes(link)
                             .then((file) => convert(file.path, file.name))
                             .then((filePath) => sendVideo({source: filePath}))
@@ -85,7 +86,10 @@ function run() {
                         .then(() => resolve(), error => reject(error));;
                 }));
                 tasks.push(new Promise(async (resolve, reject) => {
-                    return Promise.map(filteredLinks.mp4, link => sendVideo(link), {concurrency: 10})
+                    return Promise.map(filteredLinks.mp4, async link => {
+                        if (await checkFileSize(link)) return resolve();
+                        return sendVideo(link)
+                    }, {concurrency: 10})
                         .then(() => resolve(), error => reject(error));
                 }))
                 await Promise.all(tasks);

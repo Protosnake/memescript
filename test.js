@@ -1,120 +1,77 @@
-const {
-    getThreadIds, 
-    getThreadLinks, 
-    filterLinks, 
-    downloadMemes, 
-    getFailedVideos, 
-    logFailure,
-    clearFailedLog
-    } = require('./2chClient.js');
-const {convert} = require('./convert.js');
-const CHANNEL = require('./channelIds.js');
+const BASE_URL = "https://2ch.hk";
+const ARCH = "https://2ch.hk/b/arch/";
+const linkSelector = 'figcaption a.desktop';
+const threadLinkSelector = "div.pager a";
+const request = require('request-promise');
+const HTMLParser = require('node-html-parser');
+// const fs = require('fs');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
-const TOKEN = '1281981211:AAF1aGYUggPy3OKWBqfd4FcBo_jxhNmw3Ek';
-const CHANNEL_ID = CHANNEL.test;
-const Telegram = require('telegraf/telegram');
-const telegram = new Telegram(TOKEN);
 const moment = require('moment');
-const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH9YIR85w)';
-
-
+const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
+const csv = require('csv-parser');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const csvWriter = require('csv-write-stream');
+const { link } = require('fs');
 
-async function sendMessage(text, time = 0) {
-    return Promise.delay(time)
-        .then(() => telegram.sendMessage(CHANNEL_ID, text))
-        .catch(async error => {
-            if (error.response.error_code === 429) {
-                console.log(error.response.description);
-                let retry_after = error.response.parameters.retry_after;
-                await sendMessage(text, retry_after * 1000);
-            } else {
-                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
-            }
-        });
+
+
+// function checkFileSize(link) {
+//     // create folder for memes
+//     var maxSize = 10485760;
+
+//     return new Promise((resolve, reject) => {
+//         return request({
+//             url: link,
+//             method: "HEAD"
+//         }, function(err, headRes) {
+//             var size = headRes.headers['content-length'];
+//             var fileName = link.slice(-19);
+//             var filePath = `/mnt/i/code/memescript/${fileName}`;
+//             var file = fs.createWriteStream(filePath);
+//             if (size > maxSize) {
+//                 console.log('Resource size exceeds limit (' + size + ')');
+//             } else {
+//                 var file = fs.createWriteStream(filename),
+//                     size = 0;
+        
+//                 var res = request({ url: url });
+        
+//                 res.on('data', function(data) {
+//                     size += data.length;
+        
+//                     if (size > maxSize) {
+//                         console.log('Resource stream exceeded limit (' + size + ')');
+        
+//                         res.abort(); // Abort the response (close and cleanup the stream)
+//                         fs.unlink(filename); // Delete the file we were downloading the data to
+//                     }
+//                 }).pipe(file);
+//             }
+//         })
+//         .then(() => resolve())
+//         .catch(error => reject(error));
+// })}
+
+async function checkFileSize(link) {
+    // var maxSize = 15728640;
+    var maxSize = 10;
+    return new Promise((resolve, reject) => request(link, {method: 'HEAD'}).then(res => {
+        var size = res['content-length'];
+        if (size > maxSize) {
+            console.log('too big')
+            return false;
+        }
+        return true;
+    }, error => reject(error)));
 }
 
 
-// video can be link or a buffer
-async function sendVideo(video, time = 0) {
-    return Promise.delay(time).then(() => telegram.sendVideo(CHANNEL_ID, video, {supports_streaming: true, caption})
-        .then(() => console.log("\x1b[32m%s\x1b[0m" ,`${typeof video === 'object' ? 'A local file ' + video.source.path : video} uploaded successfully`))
-        .catch(async error => {
-            if (error.response.error_code === 429) {
-                console.log(error.response.description);
-                let retry_after = error.response.parameters.retry_after;
-                await sendVideo(video, retry_after * 1000);
-            } else {
-                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
-                logFailure(typeof video === 'object' ? JSON.stringify(video.source.path) : video, ` ${error.response.error_code}: ${error.description}`);
-            }
-        }));
-}
-function run() {
-    let counter = 0;
-    const date = moment().format('DD-MM');
-    const dir = `${__dirname}/${date}/`;
-    let interval;ппше 
-    clearFailedLog();
-    return getThreadIds()
-        .then(threadIds => getThreadLinks(threadIds))
-        // .then(mediaLinks => filterLinks(mediaLinks))
-        .then(async threadLinks => {
-            // threadLinks = {"/b/thread123123.html": ["/b/video.mp4", "/b/video2.mp4"]}
-            
-            // сообщаем о начале
-            await sendMessage(`мемы за ${date}`);
-            
-            // постим сообщение каждые 15 мин для навигации
-            interval = setInterval(async () => {
-                counter++;
-                await sendMessage(`${date} ${counter}`)
-            }, 600000) // 600000
+// https://2ch.hk/b/src/225407557/15956976235170.webm
 
-            // льем каждый тред отдельно
-            for (const threadId in threadLinks) {
-                await sendMessage(`Тред номер ${threadId} за ${date}`);
-                let filteredLinks = filterLinks(threadLinks[threadId]);
-                let tasks = [];
-            
-                tasks.push(new Promise((resolve, reject) => {
-                    return Promise.map(filteredLinks.webm.slice(-1), link => {
-                        return downloadMemes(link)
-                            .then((file) => convert(file.path, file.name))
-                            .then((filePath) => sendVideo({source: filePath}))
-                            .catch(error => console.log(error))
-                    }, {concurrency: 2})
-                        .then(() => resolve(), error => reject(error));;
-                }));
-                tasks.push(new Promise(async (resolve, reject) => {
-                    return Promise.map(filteredLinks.mp4.slice(-2), link => sendVideo(link + "q"), {concurrency: 4})
-                        .then(() => resolve(), error => reject(error));
-                }))
-                await Promise.all(tasks);
-            }
-        })
-        .then(() => getFailedVideos())
-        .then((failedVideos) => {
-            const tasks = [];
-            tasks.push(new Promise((resolve, reject) => {
-                return Promise.map(failedVideos.files.slice(-5), link => {
-                    return downloadMemes(link)
-                        .then((file) => convert(file.path, file.name))
-                        .then((filePath) => sendVideo({source: filePath}))
-                        .catch(error => console.log(error))
-                }, {concurrency: 2})
-                    .then(() => resolve(), error => reject(error));;
-            }));
-            tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(failedVideos.links.slice(-5), link => sendVideo(link), {concurrency: 4})
-                    .then(() => resolve(), error => reject(error));
-            }))
-            return Promise.all(tasks);
-        })
-        .then((res) => {
-            clearInterval(interval);
-            console.log("Finished after %ds", (process.hrtime(hrstart))[0])
-        });
-}
-run();
+// https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989026110.webm
+
+// https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989412200.webm
+checkFileSize("https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989026110.webm");
+// checkFileSize("https://2ch.hk/b/src/225407557/15956976235170.webm");

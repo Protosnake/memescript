@@ -8,10 +8,13 @@ const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
 const csv = require('csv-parser');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-const csvWriter = require('csv-write-stream')
+const csvWriter = require('csv-write-stream');
+const { is } = require('bluebird');
 
 const BASE_URL = "https://2ch.hk";
+const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
+const threadLinkSelector = "div.pager a";
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
 module.exports = {
@@ -31,21 +34,28 @@ module.exports = {
                     break;
                 default:
                     // assuming everything else are images
-                    links.img.push(mediaLink);        
+                    links.img.push(mediaLink);
                     break;
             }
         })
         return links;
     },
-    getThreadIds: () => {
-        const threadIds = []
-        return new Promise((resolve, reject) => fs.createReadStream(__dirname + '/threadIds.csv')
-            .pipe(csv())
-            .on('data', (row) => {
-                threadIds.push(row.threadId);
+    getThreadLinks: () => {
+        let archLink;
+        return new Promise((resolve, reject) => request(ARCH)
+            .then(res => {
+                let root = HTMLParser.parse(res);
+                const links = [];
+                root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
+                archLink = links[links.length - 2];
             })
-            .on('end', () => resolve(threadIds))
-            .on('error', (error) => reject(error)));
+            .then(() => request(BASE_URL + archLink))
+            .then(res => {
+                let root = HTMLParser.parse(res);
+                let threads = root.querySelectorAll(".box-data a");
+                let links = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
+                return resolve(links);
+            })).catch(err => reject(err));
     },
     getFailedVideos: () => {
         const csvPath = __dirname + '/failed.csv';
@@ -80,20 +90,20 @@ module.exports = {
         writer.end();
         console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
     },
-    getThreadLinks: (threadIds) => {
+    getMediaLinks: (threadLinks) => {
         const mediaLinks = {};
         return new Promise((resolve, reject) => {
-            return Promise.all(threadIds.map((threadId) => {
-                mediaLinks[threadId] = [];
-                return request(`${BASE_URL}${threadId}`).then((res) => {
+            return Promise.all(threadLinks.map((threadLink) => {
+                mediaLinks[threadLink.slice(-14)] = [];
+                return request(BASE_URL + threadLink).then((res) => {
                     var root = HTMLParser.parse(res);
                     var links = root.querySelectorAll(linkSelector);
                     links.forEach(link => {
                         // mediaLinks.push(link.getAttribute('href'));
-                        mediaLinks[threadId].push(`${BASE_URL}${link.getAttribute('href')}`);
+                        mediaLinks[threadLink.slice(-14)].push(`${BASE_URL}${link.getAttribute('href')}`);
                     });
                 },
-                err => console.log(`Could find media files in ${threadId} thred due to ${err.statusCode} error code`));
+                err => console.log(`Could find media files in ${threadLink} thred due to ${err.statusCode} error code`));
             })).then(() => {
                 let total = 0;
                 for (let i in mediaLinks) {
@@ -136,4 +146,17 @@ module.exports = {
                         return resolve({path: filePath, name: fileName});
                     });
     })},
+    checkFileSize: async (link) => {
+        // var maxSize = 15728640;
+        var maxSize = 10;
+        var isTooBig = false;
+        await request(link, {method: 'HEAD'}).then(res => {
+            var size = res['content-length'];
+            if (size > maxSize) {
+                isTooBig = true;
+                console.log("\x1b[33m%s\x1b[0m", `${link} is too big`);
+            }
+        });
+        return isTooBig;
+    }
 }
