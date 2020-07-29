@@ -15,6 +15,9 @@ const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
 const threadLinkSelector = "div.pager a";
+const WARN_COLOR = "\x1b[33m%s\x1b[0m";
+const ERR_COLOR = "\x1b[31m%s\x1b[0m";
+const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
 module.exports = {
@@ -68,7 +71,7 @@ module.exports = {
             .pipe(csv())
             .on('data', (row) => {
                 if (row.file.includes('https')) {
-                    failedVideos.links.push(row.file);
+                    failedVideos.links.push(row.links);
                 } else {
                     failedVideos.files.push(row.file);
                 }
@@ -88,7 +91,6 @@ module.exports = {
             reason: reason,
         });
         writer.end();
-        console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
     },
     getMediaLinks: (threadLinks) => {
         const mediaLinks = {};
@@ -103,7 +105,7 @@ module.exports = {
                         mediaLinks[threadLink.slice(-14)].push(`${BASE_URL}${link.getAttribute('href')}`);
                     });
                 },
-                err => console.log(`Could find media files in ${threadLink} thred due to ${err.statusCode} error code`));
+                err => console.log(ERR_COLOR, `Could not find media files in ${threadLink} thred due to ${err.statusCode} error code`));
             })).then(() => {
                 let total = 0;
                 for (let i in mediaLinks) {
@@ -116,7 +118,7 @@ module.exports = {
     },
     clearFailedLog: () => {
         const failedLog = __dirname + '/failed.csv';
-        fs.truncate(failedLog, 0, error => null ? console.log(error) : "");
+        fs.truncate(failedLog, 0, error => null ? console.log(ERR_COLOR, error) : "");
         console.log("Cleared failed log file");
     },
     /**
@@ -138,25 +140,21 @@ module.exports = {
                 return request(link)
                     .pipe(file)
                     .on('error', (error) => {
-                        console.log(error);
+                        console.log(ERR_COLOR, error);
                         return reject(error);
                     })
                     .on('finish', async () => {
-                        console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
+                        console.log(GOOD_COLOR, `File ${fileName} was downloaded`);
                         return resolve({path: filePath, name: fileName});
                     });
     })},
-    checkFileSize: async (link) => {
-        // var maxSize = 15728640;
-        var maxSize = 10;
-        var isTooBig = false;
-        await request(link, {method: 'HEAD'}).then(res => {
-            var size = res['content-length'];
-            if (size > maxSize) {
-                isTooBig = true;
-                console.log("\x1b[33m%s\x1b[0m", `${link} is too big`);
-            }
-        });
-        return isTooBig;
+    checkFileSize: (link) => {
+        var maxSize = 15728640;
+        return new Promise((resolve, reject) => request(link, {method: 'HEAD'})
+            .then(res => {
+                var size = res['content-length'];
+                return size > maxSize ? reject(`${link} is too large`) : resolve(link);
+            })
+            .catch(error => reject(error)));
     }
 }

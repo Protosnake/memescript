@@ -2,6 +2,16 @@ const ffmpeg = require('fluent-ffmpeg');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const _ = require('lodash');
+const {
+    getMediaLinks, 
+    getThreadLinks, 
+    filterLinks, 
+    downloadMemes, 
+    getFailedVideos, 
+    logFailure,
+    clearFailedLog,
+    checkFileSize
+    } = require('./2chClient.js');
 
 function checkEmpty(filePath) {
     let fileSize = fs.statSync(filePath).size;
@@ -24,16 +34,17 @@ module.exports = {
             const newFilePath = `${filePath.slice(0, -5)}.mp4`;
             ffmpeg(filePath).output(`${filePath.slice(0,-5)}.mp4`)
                 .on('error', (error) => {
-                    fs.appendFileSync('./failed.txt', filePath + '\n');
+                    // TODO
+                    // logFailure(filePath, error.replace(/[^a-zA-Z0-9]/g, ""));
                     return reject(error.message)
                 })
                 .on('end', () => {
                     console.log(`Converted ${fileName} into ${newFileName}`);
                     fs.unlinkSync(filePath);
                     console.log(`Removed file ${fileName}`);
-                    return resolve(newFilePath);
                 })
                 .run();
+                return resolve(newFilePath);
             }).catch(err => console.log(err));
     },
 };
