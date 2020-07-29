@@ -14,64 +14,53 @@ const csv = require('csv-parser');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = require('csv-write-stream');
 const { link } = require('fs');
+const threadIdsCsvPath = __dirname + '/threadIds.csv';
 
 
-
-// function checkFileSize(link) {
-//     // create folder for memes
-//     var maxSize = 10485760;
-
-//     return new Promise((resolve, reject) => {
-//         return request({
-//             url: link,
-//             method: "HEAD"
-//         }, function(err, headRes) {
-//             var size = headRes.headers['content-length'];
-//             var fileName = link.slice(-19);
-//             var filePath = `/mnt/i/code/memescript/${fileName}`;
-//             var file = fs.createWriteStream(filePath);
-//             if (size > maxSize) {
-//                 console.log('Resource size exceeds limit (' + size + ')');
-//             } else {
-//                 var file = fs.createWriteStream(filename),
-//                     size = 0;
-        
-//                 var res = request({ url: url });
-        
-//                 res.on('data', function(data) {
-//                     size += data.length;
-        
-//                     if (size > maxSize) {
-//                         console.log('Resource stream exceeded limit (' + size + ')');
-        
-//                         res.abort(); // Abort the response (close and cleanup the stream)
-//                         fs.unlink(filename); // Delete the file we were downloading the data to
-//                     }
-//                 }).pipe(file);
-//             }
-//         })
-//         .then(() => resolve())
-//         .catch(error => reject(error));
-// })}
-
-async function checkFileSize(link) {
-    // var maxSize = 15728640;
-    var maxSize = 10;
-    return new Promise((resolve, reject) => request(link, {method: 'HEAD'}).then(res => {
-        var size = res['content-length'];
-        if (size > maxSize) {
-            console.log('too big')
-            return false;
-        }
-        return true;
-    }, error => reject(error)));
+function getThreadLinks() {
+  return new Promise((resolve, reject) => request(ARCH)
+      .then(res => {
+          let root = HTMLParser.parse(res);
+          let links = [];
+          root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
+          return links[links.length - 2];
+      })
+      .then((archLink) => request(BASE_URL + archLink))
+      .then(res => {
+          let root = HTMLParser.parse(res);
+          let threads = root.querySelectorAll(".box-data a");
+          let threadLinks = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
+          return resolve(threadLinks);
+      })
+      .catch(error => reject(error)))
 }
 
+function checkLinks(links) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(threadIdsCsvPath)
+      .pipe(csv())
+      .on('data', row => {
+        links.map(link => {
+          if(row.threadId == link) {
+            links.splice(links.indexOf(link), 1);
+          }
+        })
+      })
+      .on('end', () => {
+        return resolve(links);
+      })
+      .on('error', (error) => reject(error));
+  })
+}
 
-// https://2ch.hk/b/src/225407557/15956976235170.webm
+function saveLinks(links) {
+  new Promise((resolve, reject) => {
+    let writer = csvWriter({sendHeaders: fs.readFileSync(threadIdsCsvPath).length === 0});
+    writer.pipe(fs.createWriteStream(threadIdsCsvPath, {flags: 'a'}));
+    links.forEach(link => writer.write({threadId: link}))
+    writer.end();
+    return resolve(links);
+  })
+}
 
-// https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989026110.webm
-
-// https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989412200.webm
-checkFileSize("https://2ch.hk/b/arch/2020-07-26/src/225407557/15956989026110.webm");
-// checkFileSize("https://2ch.hk/b/src/225407557/15956976235170.webm");
+getThreadLinks().then(checkLinks).then(saveLinks)

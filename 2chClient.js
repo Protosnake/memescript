@@ -18,6 +18,8 @@ const threadLinkSelector = "div.pager a";
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
+const threadIdsCsvPath = __dirname + '/threadIds.csv';
+const threadArchivePath = __dirname + '/threadArchive.csv';
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
 module.exports = {
@@ -44,55 +46,51 @@ module.exports = {
         return links;
     },
     getThreadLinks: () => {
-        let archLink;
         return new Promise((resolve, reject) => request(ARCH)
             .then(res => {
                 let root = HTMLParser.parse(res);
-                const links = [];
+                let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
-                archLink = links[links.length - 2];
+                return links[links.length - 2];
             })
-            .then(() => request(BASE_URL + archLink))
+            .then((archLink) => request(BASE_URL + archLink))
             .then(res => {
                 let root = HTMLParser.parse(res);
                 let threads = root.querySelectorAll(".box-data a");
                 let links = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
                 return resolve(links);
-            })).catch(err => reject(err));
+            })
+            .catch(error => reject(error)))
     },
-    getFailedVideos: () => {
-        const csvPath = __dirname + '/failed.csv';
-        const newCsvPath = __dirname + '/retriedFails.csv'
-        const failedVideos = {
-            links: [],
-            files: [],
-        };
-        return new Promise((resolve, reject) => fs.createReadStream(csvPath)
+    saveLinks: (links) => {
+        return new Promise((resolve, reject) => {
+            fs.createReadStream(threadIdsCsvPath)
             .pipe(csv())
-            .on('data', (row) => {
-                if (row.file.includes('https')) {
-                    failedVideos.links.push(row.links);
-                } else {
-                    failedVideos.files.push(row.file);
+            .on('data', row => {
+                links.map(link => {
+                if(row.threadId == link) {
+                    links.splice(links.indexOf(link), 1);
                 }
+                })
             })
             .on('end', () => {
-                fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
-                return resolve(failedVideos)
+                let writer = csvWriter({sendHeaders: fs.readFileSync(threadIdsCsvPath).length === 0});
+                writer.pipe(fs.createWriteStream(threadIdsCsvPath, {flags: 'a'}));
+                links.forEach(link => writer.write({threadId: link}))
+                writer.end();
+                return resolve(links);
             })
-            .on('error', (error) => reject(error)));
+            .on('error', (error) => reject(error));
+        })
     },
-    logFailure: (file, reason) => {
-        const path = './failed.csv';
-        let writer = csvWriter({sendHeaders: fs.readFileSync(path).length === 0});
-        writer.pipe(fs.createWriteStream(path, {flags: 'a'}));
-        writer.write({
-            file:file,
-            reason: reason,
-        });
+    saveThreads: (links) => {
+        let writer = csvWriter({sendHeaders: fs.readFileSync(threadArchivePath).length === 0});
+        writer.pipe(fs.createWriteStream(threadArchivePath, {flags: 'a'}));
+        links.forEach(link => writer.write({threadId: link}))
         writer.end();
     },
     getMediaLinks: (threadLinks) => {
+        console.log(threadLinks);
         const mediaLinks = {};
         return new Promise((resolve, reject) => {
             return Promise.all(threadLinks.map((threadLink) => {
@@ -120,6 +118,39 @@ module.exports = {
         const failedLog = __dirname + '/failed.csv';
         fs.truncate(failedLog, 0, error => null ? console.log(ERR_COLOR, error) : "");
         console.log("Cleared failed log file");
+    },
+    getFailedVideos: () => {
+        const csvPath = __dirname + '/failed.csv';
+        const newCsvPath = __dirname + '/retriedFails.csv'
+        const failedVideos = {
+            links: [],
+            files: [],
+        };
+        return new Promise((resolve, reject) => fs.createReadStream(csvPath)
+            .pipe(csv())
+            .on('data', (row) => {
+                if (row.file.includes('https')) {
+                    failedVideos.links.push(row.links);
+                } else {
+                    failedVideos.files.push(row.file);
+                }
+            })
+            .on('end', () => {
+                fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
+                module.exports.clearFailedLog();
+                return resolve(failedVideos)
+            })
+            .on('error', (error) => reject(error)));
+    },
+    logFailure: (file, reason) => {
+        const path = './failed.csv';
+        let writer = csvWriter({sendHeaders: fs.readFileSync(path).length === 0});
+        writer.pipe(fs.createWriteStream(path, {flags: 'a'}));
+        writer.write({
+            file:file,
+            reason: reason,
+        });
+        writer.end();
     },
     /**
      * @param {string} link 

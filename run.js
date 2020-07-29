@@ -1,4 +1,5 @@
 const {
+    saveLinks,
     getMediaLinks, 
     getThreadLinks, 
     filterLinks, 
@@ -6,7 +7,8 @@ const {
     getFailedVideos, 
     logFailure,
     clearFailedLog,
-    checkFileSize
+    checkFileSize,
+    saveThreads,
     } = require('./2chClient.js');
 const {convert} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
@@ -49,9 +51,10 @@ async function sendVideo(video, time = 0) {
             if (error.response.error_code === 429) {
                 console.log(WARN_COLOR, error.response.description);
                 let retry_after = error.response.parameters.retry_after;
-                // TODO
+
+                // ебучие видео где-то переназначается и становится ReadStream, следственно вот 
                 if (typeof video === "object") video = backupVideo
-                console.log(video);
+                
                 await sendVideo(video, retry_after * 1000);
             } else {
                 console.log(ERR_COLOR, `${error.response.description}`);
@@ -60,12 +63,17 @@ async function sendVideo(video, time = 0) {
         }));
 }
 function run() {
+    let threadIds;
     let counter = 0;
     const date = moment().format('DD-MM');
     let interval;
     clearFailedLog();
     return getThreadLinks()
-        .then(threadLinks => getMediaLinks(threadLinks))
+        .then(links => {
+            threadIds = _.cloneDeep(links);
+            return saveLinks(links);
+        })
+        .then(getMediaLinks)
         .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
@@ -104,6 +112,7 @@ function run() {
                 await Promise.all(tasks);
             }
         })
+        .then(() => saveThreads(threadIds))
         .then(() => getFailedVideos())
         .then((failedVideos) => {
             const tasks = [];
