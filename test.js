@@ -1,120 +1,66 @@
-const {
-    getThreadIds, 
-    getThreadLinks, 
-    filterLinks, 
-    downloadMemes, 
-    getFailedVideos, 
-    logFailure,
-    clearFailedLog
-    } = require('./2chClient.js');
-const {convert} = require('./convert.js');
-const CHANNEL = require('./channelIds.js');
+const BASE_URL = "https://2ch.hk";
+const ARCH = "https://2ch.hk/b/arch/";
+const linkSelector = 'figcaption a.desktop';
+const threadLinkSelector = "div.pager a";
+const request = require('request-promise');
+const HTMLParser = require('node-html-parser');
+// const fs = require('fs');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
-const TOKEN = '1281981211:AAF1aGYUggPy3OKWBqfd4FcBo_jxhNmw3Ek';
-const CHANNEL_ID = CHANNEL.test;
-const Telegram = require('telegraf/telegram');
-const telegram = new Telegram(TOKEN);
 const moment = require('moment');
-const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH9YIR85w)';
-
-
+const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
+const csv = require('csv-parser');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const csvWriter = require('csv-write-stream');
+const { link } = require('fs');
+const threadIdsCsvPath = __dirname + '/threadIds.csv';
 
-async function sendMessage(text, time = 0) {
-    return Promise.delay(time)
-        .then(() => telegram.sendMessage(CHANNEL_ID, text))
-        .catch(async error => {
-            if (error.response.error_code === 429) {
-                console.log(error.response.description);
-                let retry_after = error.response.parameters.retry_after;
-                await sendMessage(text, retry_after * 1000);
-            } else {
-                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
-            }
-        });
+
+function getThreadLinks() {
+  return new Promise((resolve, reject) => request(ARCH)
+      .then(res => {
+          let root = HTMLParser.parse(res);
+          let links = [];
+          root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
+          return links[links.length - 2];
+      })
+      .then((archLink) => request(BASE_URL + archLink))
+      .then(res => {
+          let root = HTMLParser.parse(res);
+          let threads = root.querySelectorAll(".box-data a");
+          let threadLinks = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
+          return resolve(threadLinks);
+      })
+      .catch(error => reject(error)))
 }
 
-
-// video can be link or a buffer
-async function sendVideo(video, time = 0) {
-    return Promise.delay(time).then(() => telegram.sendVideo(CHANNEL_ID, video, {supports_streaming: true, caption})
-        .then(() => console.log("\x1b[32m%s\x1b[0m" ,`${typeof video === 'object' ? 'A local file ' + video.source.path : video} uploaded successfully`))
-        .catch(async error => {
-            if (error.response.error_code === 429) {
-                console.log(error.response.description);
-                let retry_after = error.response.parameters.retry_after;
-                await sendVideo(video, retry_after * 1000);
-            } else {
-                console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
-                logFailure(typeof video === 'object' ? JSON.stringify(video.source.path) : video, ` ${error.response.error_code}: ${error.description}`);
-            }
-        }));
-}
-function run() {
-    let counter = 0;
-    const date = moment().format('DD-MM');
-    const dir = `${__dirname}/${date}/`;
-    let interval;ппше 
-    clearFailedLog();
-    return getThreadIds()
-        .then(threadIds => getThreadLinks(threadIds))
-        // .then(mediaLinks => filterLinks(mediaLinks))
-        .then(async threadLinks => {
-            // threadLinks = {"/b/thread123123.html": ["/b/video.mp4", "/b/video2.mp4"]}
-            
-            // сообщаем о начале
-            await sendMessage(`мемы за ${date}`);
-            
-            // постим сообщение каждые 15 мин для навигации
-            interval = setInterval(async () => {
-                counter++;
-                await sendMessage(`${date} ${counter}`)
-            }, 600000) // 600000
-
-            // льем каждый тред отдельно
-            for (const threadId in threadLinks) {
-                await sendMessage(`Тред номер ${threadId} за ${date}`);
-                let filteredLinks = filterLinks(threadLinks[threadId]);
-                let tasks = [];
-            
-                tasks.push(new Promise((resolve, reject) => {
-                    return Promise.map(filteredLinks.webm.slice(-1), link => {
-                        return downloadMemes(link)
-                            .then((file) => convert(file.path, file.name))
-                            .then((filePath) => sendVideo({source: filePath}))
-                            .catch(error => console.log(error))
-                    }, {concurrency: 2})
-                        .then(() => resolve(), error => reject(error));;
-                }));
-                tasks.push(new Promise(async (resolve, reject) => {
-                    return Promise.map(filteredLinks.mp4.slice(-2), link => sendVideo(link + "q"), {concurrency: 4})
-                        .then(() => resolve(), error => reject(error));
-                }))
-                await Promise.all(tasks);
-            }
+function checkLinks(links) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(threadIdsCsvPath)
+      .pipe(csv())
+      .on('data', row => {
+        links.map(link => {
+          if(row.threadId == link) {
+            links.splice(links.indexOf(link), 1);
+          }
         })
-        .then(() => getFailedVideos())
-        .then((failedVideos) => {
-            const tasks = [];
-            tasks.push(new Promise((resolve, reject) => {
-                return Promise.map(failedVideos.files.slice(-5), link => {
-                    return downloadMemes(link)
-                        .then((file) => convert(file.path, file.name))
-                        .then((filePath) => sendVideo({source: filePath}))
-                        .catch(error => console.log(error))
-                }, {concurrency: 2})
-                    .then(() => resolve(), error => reject(error));;
-            }));
-            tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(failedVideos.links.slice(-5), link => sendVideo(link), {concurrency: 4})
-                    .then(() => resolve(), error => reject(error));
-            }))
-            return Promise.all(tasks);
-        })
-        .then((res) => {
-            clearInterval(interval);
-            console.log("Finished after %ds", (process.hrtime(hrstart))[0])
-        });
+      })
+      .on('end', () => {
+        return resolve(links);
+      })
+      .on('error', (error) => reject(error));
+  })
 }
-run();
+
+function saveLinks(links) {
+  new Promise((resolve, reject) => {
+    let writer = csvWriter({sendHeaders: fs.readFileSync(threadIdsCsvPath).length === 0});
+    writer.pipe(fs.createWriteStream(threadIdsCsvPath, {flags: 'a'}));
+    links.forEach(link => writer.write({threadId: link}))
+    writer.end();
+    return resolve(links);
+  })
+}
+
+getThreadLinks().then(checkLinks).then(saveLinks)

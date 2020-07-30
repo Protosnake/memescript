@@ -8,10 +8,18 @@ const ffmpeg = require('fluent-ffmpeg');
 const hrstart = process.hrtime();
 const csv = require('csv-parser');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-const csvWriter = require('csv-write-stream')
+const csvWriter = require('csv-write-stream');
+const { is } = require('bluebird');
 
 const BASE_URL = "https://2ch.hk";
+const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
+const threadLinkSelector = "div.pager a";
+const WARN_COLOR = "\x1b[33m%s\x1b[0m";
+const ERR_COLOR = "\x1b[31m%s\x1b[0m";
+const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
+const threadIdsCsvPath = __dirname + '/threadIds.csv';
+const threadArchivePath = __dirname + '/threadArchive.csv';
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
 module.exports = {
@@ -31,21 +39,84 @@ module.exports = {
                     break;
                 default:
                     // assuming everything else are images
-                    links.img.push(mediaLink);        
+                    links.img.push(mediaLink);
                     break;
             }
         })
         return links;
     },
-    getThreadIds: () => {
-        const threadIds = []
-        return new Promise((resolve, reject) => fs.createReadStream(__dirname + '/threadIds.csv')
-            .pipe(csv())
-            .on('data', (row) => {
-                threadIds.push(row.threadId);
+    getThreadLinks: () => {
+        return new Promise((resolve, reject) => request(ARCH)
+            .then(res => {
+                let root = HTMLParser.parse(res);
+                let links = [];
+                root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
+                return links[links.length - 2];
             })
-            .on('end', () => resolve(threadIds))
-            .on('error', (error) => reject(error)));
+            .then((archLink) => request(BASE_URL + archLink))
+            .then(res => {
+                let root = HTMLParser.parse(res);
+                let threads = root.querySelectorAll(".box-data a");
+                let links = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
+                return resolve(links);
+            })
+            .catch(error => reject(error)))
+    },
+    saveLinks: (links) => {
+        return new Promise((resolve, reject) => {
+            fs.createReadStream(threadIdsCsvPath)
+            .pipe(csv())
+            .on('data', row => {
+                links.map(link => {
+                if(row.threadId == link) {
+                    links.splice(links.indexOf(link), 1);
+                }
+                })
+            })
+            .on('end', () => {
+                let writer = csvWriter({sendHeaders: fs.readFileSync(threadIdsCsvPath).length === 0});
+                writer.pipe(fs.createWriteStream(threadIdsCsvPath, {flags: 'a'}));
+                links.forEach(link => writer.write({threadId: link}))
+                writer.end();
+                return resolve(links);
+            })
+            .on('error', (error) => reject(error));
+        })
+    },
+    saveThreads: (links) => {
+        let writer = csvWriter({sendHeaders: fs.readFileSync(threadArchivePath).length === 0});
+        writer.pipe(fs.createWriteStream(threadArchivePath, {flags: 'a'}));
+        links.forEach(link => writer.write({threadId: link}))
+        writer.end();
+    },
+    getMediaLinks: (threadLinks) => {
+        const mediaLinks = {};
+        return new Promise((resolve, reject) => {
+            return Promise.all(threadLinks.map((threadLink) => {
+                mediaLinks[threadLink.slice(-14)] = [];
+                return request(BASE_URL + threadLink).then((res) => {
+                    var root = HTMLParser.parse(res);
+                    var links = root.querySelectorAll(linkSelector);
+                    links.forEach(link => {
+                        // mediaLinks.push(link.getAttribute('href'));
+                        mediaLinks[threadLink.slice(-14)].push(`${BASE_URL}${link.getAttribute('href')}`);
+                    });
+                },
+                err => console.log(ERR_COLOR, `Could not find media files in ${threadLink} thred due to ${err.statusCode} error code`));
+            })).then(() => {
+                let total = 0;
+                for (let i in mediaLinks) {
+                    total = total + mediaLinks[i].length;
+                }
+                console.log(`Found ${total} media files`);
+                return resolve(mediaLinks);
+            }, error => reject(error));
+        })
+    },
+    clearFailedLog: () => {
+        const failedLog = __dirname + '/failed.csv';
+        fs.truncate(failedLog, 0, error => null ? console.log(ERR_COLOR, error) : "");
+        console.log("Cleared failed log file");
     },
     getFailedVideos: () => {
         const csvPath = __dirname + '/failed.csv';
@@ -58,13 +129,14 @@ module.exports = {
             .pipe(csv())
             .on('data', (row) => {
                 if (row.file.includes('https')) {
-                    failedVideos.links.push(row.file);
+                    failedVideos.links.push(row.links);
                 } else {
                     failedVideos.files.push(row.file);
                 }
             })
             .on('end', () => {
                 fs.createReadStream(csvPath).pipe(fs.createWriteStream(newCsvPath));
+                module.exports.clearFailedLog();
                 return resolve(failedVideos)
             })
             .on('error', (error) => reject(error)));
@@ -78,36 +150,6 @@ module.exports = {
             reason: reason,
         });
         writer.end();
-        console.log("\x1b[31m%s\x1b[0m", ` ${reason}`)
-    },
-    getThreadLinks: (threadIds) => {
-        const mediaLinks = {};
-        return new Promise((resolve, reject) => {
-            return Promise.all(threadIds.map((threadId) => {
-                mediaLinks[threadId] = [];
-                return request(`${BASE_URL}${threadId}`).then((res) => {
-                    var root = HTMLParser.parse(res);
-                    var links = root.querySelectorAll(linkSelector);
-                    links.forEach(link => {
-                        // mediaLinks.push(link.getAttribute('href'));
-                        mediaLinks[threadId].push(`${BASE_URL}${link.getAttribute('href')}`);
-                    });
-                },
-                err => console.log(`Could find media files in ${threadId} thred due to ${err.statusCode} error code`));
-            })).then(() => {
-                let total = 0;
-                for (let i in mediaLinks) {
-                    total = total + mediaLinks[i].length;
-                }
-                console.log(`Found ${total} media files`);
-                return resolve(mediaLinks);
-            }, error => reject(error));
-        })
-    },
-    clearFailedLog: () => {
-        const failedLog = __dirname + '/failed.csv';
-        fs.truncate(failedLog, 0, error => null ? console.log(error) : "");
-        console.log("Cleared failed log file");
     },
     /**
      * @param {string} link 
@@ -128,12 +170,21 @@ module.exports = {
                 return request(link)
                     .pipe(file)
                     .on('error', (error) => {
-                        console.log(error);
+                        console.log(ERR_COLOR, error);
                         return reject(error);
                     })
                     .on('finish', async () => {
-                        console.log("\x1b[32m%s\x1b[0m", `File ${fileName} was downloaded`);
+                        console.log(GOOD_COLOR, `File ${fileName} was downloaded`);
                         return resolve({path: filePath, name: fileName});
                     });
     })},
+    checkFileSize: (link) => {
+        var maxSize = 15728640;
+        return new Promise((resolve, reject) => request(link, {method: 'HEAD'})
+            .then(res => {
+                var size = res['content-length'];
+                return size > maxSize ? reject(`${link} is too large`) : resolve(link);
+            })
+            .catch(error => reject(error)));
+    }
 }
