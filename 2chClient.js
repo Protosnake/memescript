@@ -90,7 +90,6 @@ module.exports = {
         writer.end();
     },
     getMediaLinks: (threadLinks) => {
-        console.log(threadLinks);
         const mediaLinks = {};
         return new Promise((resolve, reject) => {
             return Promise.all(threadLinks.map((threadLink) => {

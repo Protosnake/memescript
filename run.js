@@ -56,6 +56,13 @@ async function sendVideo(video, time = 0) {
                 if (typeof video === "object") video = backupVideo
                 
                 await sendVideo(video, retry_after * 1000);
+            } else if (error.response.description.includes("no video")) {
+                console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
+                await sendVideo(video);
+                // add non empty check
+            } else if (error.response.description.includes("non-empty")) {
+                console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
+                await sendVideo(video);
             } else {
                 console.log(ERR_COLOR, `${error.response.description}`);
                 logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
@@ -99,7 +106,7 @@ function run() {
                                 .then(filePath => sendVideo({source: filePath}))
                                 .catch(error => console.log(ERR_COLOR, error)),
                             error => console.log(WARN_COLOR, error))
-                        , {concurrency: 10}).then(() => resolve(), error => reject(error));
+                        , {concurrency: 5}).then(() => resolve(), error => reject(error));
                 }));
 
                 // обрабатываем mp4
