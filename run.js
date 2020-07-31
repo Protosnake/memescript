@@ -10,7 +10,7 @@ const {
     checkFileSize,
     saveThreads,
     } = require('./2chClient.js');
-const {convert} = require('./convert.js');
+const {convert, checkExistsWithTimeout} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
 const _ = require('lodash');
@@ -59,10 +59,6 @@ async function sendVideo(video, time = 0) {
             } else if (error.response.description.includes("no video")) {
                 console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
                 await sendVideo(video);
-                // add non empty check
-            } else if (error.response.description.includes("non-empty")) {
-                console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
-                await sendVideo(video);
             } else {
                 console.log(ERR_COLOR, `${error.response.description}`);
                 logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
@@ -103,6 +99,7 @@ function run() {
                     return Promise.map(filteredLinks.webm, link => checkFileSize(link)
                         .then(link => downloadMemes(link)
                                 .then(file => convert(file.path, file.name))
+                                .then(filePath => checkExistsWithTimeout(filePath))
                                 .then(filePath => sendVideo({source: filePath}))
                                 .catch(error => console.log(ERR_COLOR, error)),
                             error => console.log(WARN_COLOR, error))
