@@ -15,6 +15,7 @@
     "csv-write-stream": "^2.0.0",
     "csv-writer": "^1.6.0",
     "fluent-ffmpeg": "^2.1.2",
+    "handbrake-js": "^5.0.0",
     "lodash": "^4.17.15",
     "moment": "^2.25.3",
     "node-html-parser": "^1.2.16",
