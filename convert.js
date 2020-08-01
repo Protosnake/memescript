@@ -57,7 +57,6 @@ module.exports = {
         return new Promise(async (resolve, reject) => {
             const newFileName = `${fileName.slice(0, -5)}.mp4`;
             const newFilePath = `${filePath.slice(0, -5)}.mp4`;
-            console.log(filePath);
             await hbjs.spawn({ input: filePath, output: `${filePath.slice(0, -5)}.mp4` })
                 .on('error', err => {
                     console.log(ERR_COLOR, err.message);
