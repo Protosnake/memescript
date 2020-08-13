@@ -1,5 +1,5 @@
 const {
-    saveLinks,
+    saveLink,
     getMediaLinks, 
     getThreadLinks, 
     filterLinks, 
@@ -8,7 +8,6 @@ const {
     logFailure,
     clearFailedLog,
     checkFileSize,
-    saveThreads,
     } = require('./2chClient.js');
 const {convert, checkExistsWithTimeout} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
@@ -16,7 +15,6 @@ const Promise = require('bluebird');
 const _ = require('lodash');
 const fs = Promise.promisifyAll(require('fs'));
 const TOKEN = CHANNEL.token;
-const CHANNEL_ID = CHANNEL.id;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
 const moment = require('moment');
@@ -24,6 +22,8 @@ const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
+
+const CHANNEL_ID = CHANNEL.id;
 
 
 const hrstart = process.hrtime();
@@ -66,22 +66,17 @@ async function sendVideo(video, time = 0) {
         }));
 }
 function run() {
-    let threadIds;
     let counter = 0;
     const date = moment().format('DD-MM');
     let interval;
     clearFailedLog();
     return getThreadLinks()
-        .then(links => {
-            threadIds = _.cloneDeep(links);
-            return saveLinks(links);
-        })
         .then(getMediaLinks)
         .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
             
-            // постим сообщение каждые 15 мин для навигации
+            // постим сообщение каждые 10 мин для навигации
             interval = setInterval(async () => {
                 counter++;
                 await sendMessage(`${date} ${counter}`)
@@ -113,10 +108,9 @@ function run() {
                         .catch(error => console.log(ERR_COLOR, error))
                     , {concurrency: 5}).then(() => resolve(), error => reject(error));
                 }));
-                await Promise.all(tasks);
+                await Promise.all(tasks).then(() => saveLink(threadId));
             }
         })
-        .then(() => saveThreads(threadIds))
         .then(() => getFailedVideos())
         .then((failedVideos) => {
             const tasks = [];

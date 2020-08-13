@@ -9,7 +9,7 @@ const hrstart = process.hrtime();
 const csv = require('csv-parser');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = require('csv-write-stream');
-const { is } = require('bluebird');
+const { is, resolve, reject } = require('bluebird');
 
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
@@ -18,7 +18,6 @@ const threadLinkSelector = "div.pager a";
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
-const threadIdsCsvPath = __dirname + '/threadIds.csv';
 const threadArchivePath = __dirname + '/threadArchive.csv';
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
@@ -51,36 +50,46 @@ module.exports = {
                 let root = HTMLParser.parse(res);
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
-                return links[links.length - 2];
+                return links.slice(links.length - 5);
             })
-            .then((archLink) => request(BASE_URL + archLink))
-            .then(res => {
-                let root = HTMLParser.parse(res);
-                let threads = root.querySelectorAll(".box-data a");
-                let links = Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => a.getAttribute("href"));
-                return resolve(links);
+            .then(async archLinks => {
+                let links = [];
+                await Promise.map(archLinks, archLink => request(BASE_URL + archLink)
+                    .then(res => {
+                        let root = HTMLParser.parse(res);
+                        let threads = root.querySelectorAll(".box-data a");
+                        Array.from(threads).filter(link => link.text.toLowerCase().includes("webm")).map(a => links.push(a.getAttribute("href")));
+                    }));
+                return links;
             })
+            .then(module.exports.checkLinks)
+            .then(resolve)
             .catch(error => reject(error)))
     },
-    saveLinks: (links) => {
+    checkLinks: (links) => {
         return new Promise((resolve, reject) => {
-            fs.createReadStream(threadIdsCsvPath)
+            fs.createReadStream(threadArchivePath)
             .pipe(csv())
             .on('data', row => {
                 links.map(link => {
-                if(row.threadId == link) {
-                    links.splice(links.indexOf(link), 1);
-                }
+                    if(row.threadId == link) {
+                        links.splice(links.indexOf(link), 1);
+                    }
                 })
             })
             .on('end', () => {
-                let writer = csvWriter({sendHeaders: fs.readFileSync(threadIdsCsvPath).length === 0});
-                writer.pipe(fs.createWriteStream(threadIdsCsvPath, {flags: 'a'}));
-                links.forEach(link => writer.write({threadId: link}))
-                writer.end();
                 return resolve(links);
             })
             .on('error', (error) => reject(error));
+        })
+    },
+    saveLink: (link) => {
+        return new Promise((resolve, reject) => {
+            let writer = csvWriter({sendHeaders: fs.readFileSync(threadArchivePath).length === 0});
+            writer.pipe(fs.createWriteStream(threadArchivePath, {flags: 'a'}));
+            writer.write({threadId: link});
+            writer.end();
+            return resolve(link);
         })
     },
     saveThreads: (links) => {
@@ -93,13 +102,13 @@ module.exports = {
         const mediaLinks = {};
         return new Promise((resolve, reject) => {
             return Promise.all(threadLinks.map((threadLink) => {
-                mediaLinks[threadLink.slice(-14)] = [];
+                mediaLinks[threadLink] = [];
                 return request(BASE_URL + threadLink).then((res) => {
                     var root = HTMLParser.parse(res);
                     var links = root.querySelectorAll(linkSelector);
                     links.forEach(link => {
                         // mediaLinks.push(link.getAttribute('href'));
-                        mediaLinks[threadLink.slice(-14)].push(`${BASE_URL}${link.getAttribute('href')}`);
+                        mediaLinks[threadLink].push(`${BASE_URL}${link.getAttribute('href')}`);
                     });
                 },
                 err => console.log(ERR_COLOR, `Could not find media files in ${threadLink} thred due to ${err.statusCode} error code`));
