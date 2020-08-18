@@ -64,14 +64,25 @@ module.exports = {
                 })
                 .on('end', () => {
                     console.log(GOOD_COLOR, `Converted ${fileName} into ${newFileName}`);
-                    fs.unlinkSync(filePath);
-                    console.log(GOOD_COLOR, `Removed file ${fileName}`);
+                    fs.unlink(filePath, error => {
+                        if (error) console.log(ERR_COLOR, error);
+                        console.log(GOOD_COLOR, `Removed file ${fileName}`);
+                    })
                     return resolve(newFilePath);
                 })
-        })
+        }).catch(error => console.log(error));
     },
     checkExistsWithTimeout: (filePath, timeout = 5000) => {
         return new Promise(function (resolve, reject) {
+            var dir = path.dirname(filePath);
+            var basename = path.basename(filePath);
+            var watcher = fs.watch(dir, function (eventType, filename) {
+                if (eventType === 'rename' && filename === basename) {
+                    clearTimeout(timer);
+                    watcher.close();
+                    resolve(filePath);
+                }
+            });
             var timer = setTimeout(function () {
                 watcher.close();
                 reject(new Error('File did not exists and was not created during the timeout.'));
@@ -85,16 +96,16 @@ module.exports = {
                 }
             });
     
-            var dir = path.dirname(filePath);
-            var basename = path.basename(filePath);
-            var watcher = fs.watch(dir, function (eventType, filename) {
-                if (eventType === 'rename' && filename === basename) {
-                    clearTimeout(timer);
-                    watcher.close();
-                    console.log('resolving')
-                    resolve(filePath);
-                }
-            });
+            // var dir = path.dirname(filePath);
+            // var basename = path.basename(filePath);
+            // var watcher = fs.watch(dir, function (eventType, filename) {
+            //     if (eventType === 'rename' && filename === basename) {
+            //         clearTimeout(timer);
+            //         watcher.close();
+            //         console.log('resolving')
+            //         resolve(filePath);
+            //     }
+            // });
         });
     }
 };

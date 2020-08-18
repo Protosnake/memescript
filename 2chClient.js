@@ -50,7 +50,8 @@ module.exports = {
                 let root = HTMLParser.parse(res);
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
-                return links.slice(links.length - 6, -1);
+                // return links.slice(links.length - 6, -1);
+                return links.slice(links.length - 5, -1);
             })
             .then(async archLinks => {
                 let links = [];
