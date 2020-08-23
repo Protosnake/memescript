@@ -98,7 +98,7 @@ function run() {
                                 .then(filePath => sendVideo({source: filePath}))
                                 .catch(error => console.log(ERR_COLOR, error)),
                             error => console.log(WARN_COLOR, error))
-                        , {concurrency: 5}).then(() => resolve(), error => reject(error));
+                        , {concurrency: 3}).then(() => resolve(), error => reject(error));
                 }));
 
                 // обрабатываем mp4

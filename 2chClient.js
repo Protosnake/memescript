@@ -51,7 +51,7 @@ module.exports = {
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
                 // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 5, -1);
+                return links.slice(links.length - 10, -1);
             })
             .then(async archLinks => {
                 let links = [];
@@ -62,7 +62,7 @@ module.exports = {
                         // threads.filter(link => (link.text.toLowerCase().includes("webm") && !link.text.toLowerCase().includes("музыкальный")) || link.text.toLowerCase().includes('tik tok')).forEach(t => console.log(t.text))
                         threads
                             .filter(link => link.text.toLowerCase().includes('webm') || link.text.toLowerCase().includes('tik tok') || link.text.toLowerCase().includes('tiktok'))
-                            .filter(link => !link.text.toLowerCase().includes('музыкальный') && !link.text.toLowerCase().includes('music') && !link.text.toLowerCase().includes('war') && !link.text.toLowerCase().includes('dark'))
+                            .filter(link => !link.text.toLowerCase().includes('музыкальный') && !link.text.toLowerCase().includes('music') && !link.text.toLowerCase().includes('war') && !link.text.toLowerCase().includes('dark') && !link.text.toLowerCase().includes('ночной'))
                             .map(a => links.push(a.getAttribute("href")));
                     }));
                     // TODO
