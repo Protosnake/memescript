@@ -4,12 +4,8 @@ const HTMLParser = require('node-html-parser');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const moment = require('moment');
-const ffmpeg = require('fluent-ffmpeg');
-const hrstart = process.hrtime();
 const csv = require('csv-parser');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const csvWriter = require('csv-write-stream');
-const { is, resolve, reject } = require('bluebird');
 
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
@@ -51,7 +47,7 @@ module.exports = {
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
                 // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 10, -1);
+                return links.slice(links.length - 6, -1);
             })
             .then(async archLinks => {
                 let links = [];
