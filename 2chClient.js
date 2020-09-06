@@ -58,7 +58,7 @@ module.exports = {
             .pipe(csv())
             .on('data', (row) => {
                 if (row.file.includes('https')) {
-                    failedVideos.links.push(row.file);
+                    failedVideos.links.push(row.links);
                 } else {
                     failedVideos.files.push(row.file);
                 }
@@ -136,4 +136,17 @@ module.exports = {
                         return resolve({path: filePath, name: fileName});
                     });
     })},
+    checkFileSize: async (link) => {
+        // var maxSize = 15728640;
+        var maxSize = 10;
+        var isTooBig = false;
+        await request(link, {method: 'HEAD'}).then(res => {
+            var size = res['content-length'];
+            if (size > maxSize) {
+                isTooBig = true;
+                console.log("\x1b[33m%s\x1b[0m", `${link} is too big`);
+            }
+        });
+        return isTooBig;
+    },
 }

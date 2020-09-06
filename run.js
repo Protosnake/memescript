@@ -5,14 +5,15 @@ const {
     downloadMemes, 
     getFailedVideos, 
     logFailure,
-    clearFailedLog
+    clearFailedLog,
+    checkFileSize,
     } = require('./2chClient.js');
 const {convert} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const TOKEN = '1281981211:AAF1aGYUggPy3OKWBqfd4FcBo_jxhNmw3Ek';
-const CHANNEL_ID = CHANNEL.id;
+const CHANNEL_ID = CHANNEL.test;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
 const moment = require('moment');
@@ -45,6 +46,9 @@ async function sendVideo(video, time = 0) {
                 console.log(error.response.description);
                 let retry_after = error.response.parameters.retry_after;
                 await sendVideo(video, retry_after * 1000);
+            } else if (error.response.description.includes("no video")) {
+                console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
+                await sendVideo(video, 5000);
             } else {
                 console.log("\x1b[31m%s\x1b[0m", `${error.response.description}`);
                 logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
@@ -81,7 +85,7 @@ function run() {
                             .then((file) => convert(file.path, file.name))
                             .then((filePath) => sendVideo({source: filePath}))
                             .catch(error => console.log(error))
-                    }, {concurrency: 5})
+                    }, {concurrency: 3})
                         .then(() => resolve(), error => reject(error));;
                 }));
                 tasks.push(new Promise(async (resolve, reject) => {
