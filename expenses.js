@@ -2,14 +2,14 @@ const fs = require('fs');
 const moment = require('moment');
 const csv = require('csv-parser');
 const csvWriter = require('csv-write-stream');
-const path = __dirname + '/expenses2.csv';
+const path = __dirname + '/expenses.csv';
 
 function run() {
     let investment = 0;
     let ad_revenue = 0;
     let total_expenses = 0;
-    
-    fs.createReadStream(path).pipe(csv({separator: ';'})).on('data', row => {
+    // ['оп','дата','сумма','валюта','статус','название']
+    fs.createReadStream(path).pipe(csv({separator: ';', skipLines: 4})).on('data', row => {
         if(row['+/-'] == '+') {
             if (row['name'].includes('Пополнение с карты ****1321')) investment += parseInt(row['amount'])
             else ad_revenue += parseInt(row['amount']);
