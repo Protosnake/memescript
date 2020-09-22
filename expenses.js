@@ -8,7 +8,6 @@ function run() {
     let investment = 0;
     let ad_revenue = 0;
     let total_expenses = 0;
-    // ['оп','дата','сумма','валюта','статус','название']
     fs.createReadStream(path).pipe(csv({separator: ';', skipLines: 4})).on('data', row => {
         if(row['+/-'] == '+') {
             if (row['name'].includes('Пополнение с карты ****1321')) investment += parseInt(row['amount'])
@@ -21,6 +20,7 @@ function run() {
         console.log(`Расходы за месяц ${total_expenses} руб`)
         console.log(`Доходы от рекламы за месяц составили ${ad_revenue} руб`)
         console.log(`Инвестировано за месяц ${investment} руб`);
+        console.log(`Прибыль за месяц: ${ad_revenue - total_expenses - investment}`)
     })
     .on('error', error => console.log(error));
 }
