@@ -111,25 +111,25 @@ function run() {
                 await Promise.all(tasks).then(() => saveLink(threadId));
             }
         })
-        .then(() => getFailedVideos())
-        .then((failedVideos) => {
-            const tasks = [];
-            tasks.push(new Promise((resolve, reject) => {
-                return Promise.map(failedVideos.links, link => {
-                    return downloadMemes(link)
-                        .then((file) => convert(file.path, file.name))
-                        .then((filePath) => sendVideo({source: filePath}))
-                        .catch(error => console.log(ERR_COLOR, error))
-                }, {concurrency: 5})
-                    .then(() => resolve(), error => reject(error));;
-            }));
-            tasks.push(new Promise(async (resolve, reject) => {
-                return Promise.map(failedVideos.files, file => sendVideo({source: file}), {concurrency: 5})
-                    .then(() => resolve(), error => reject(error));
-            }))
-            return Promise.all(tasks);
-        })
-        .then((res) => {
+        // .then(() => getFailedVideos())
+        // .then((failedVideos) => {
+        //     const tasks = [];
+        //     tasks.push(new Promise((resolve, reject) => {
+        //         return Promise.map(failedVideos.links, link => {
+        //             return downloadMemes(link)
+        //                 .then((file) => convert(file.path, file.name))
+        //                 .then((filePath) => sendVideo({source: filePath}))
+        //                 .catch(error => console.log(ERR_COLOR, error))
+        //         }, {concurrency: 5})
+        //             .then(() => resolve(), error => reject(error));;
+        //     }));
+        //     tasks.push(new Promise(async (resolve, reject) => {
+        //         return Promise.map(failedVideos.files, file => sendVideo({source: file}), {concurrency: 5})
+        //             .then(() => resolve(), error => reject(error));
+        //     }))
+        //     return Promise.all(tasks);
+        // })
+        .then(() => {
             clearInterval(interval);
             console.log("Finished after %ds", (process.hrtime(hrstart))[0]);
             process.exit(0);
