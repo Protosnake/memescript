@@ -105,10 +105,10 @@ function run() {
                 tasks.push(new Promise((resolve, reject) => {
                     return new Promise.map(filteredLinks.mp4, link => checkFileSize(link)
                         .then(link => sendVideo(link), error => console.log(WARN_COLOR, error))
-                        .catch(error => console.log(ERR_COLOR, error))
+                        .catch(error => reject(error))
                     , {concurrency: 5}).then(() => resolve(), error => reject(error));
                 }));
-                await Promise.all(tasks).then(() => saveLink(threadId));
+                await Promise.all(tasks).then(() => saveLink(threadId)).catch(error => console.log(WARN_COLOR, error));
             }
         })
         // .then(() => getFailedVideos())

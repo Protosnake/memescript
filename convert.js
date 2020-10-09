@@ -10,7 +10,6 @@ const {
     getFailedVideos, 
     logFailure,
     clearFailedLog,
-    checkFileSize
     } = require('./2chClient.js');
 const { resolve, reject } = require('bluebird');
 const hbjs = require('handbrake-js');
