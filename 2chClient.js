@@ -15,6 +15,7 @@ const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 const threadArchivePath = __dirname + '/threadArchive.csv';
+const threadIdsPath = __dirname + '/threadIds.csv';
 // const linkSelector = '#posts-form .thread div div div.post__images figure figcaption a.desktop';
 
 module.exports = {
@@ -41,34 +42,47 @@ module.exports = {
         return links;
     },
     getThreadLinks: () => {
-        return new Promise((resolve, reject) => request(ARCH)
-            .then(res => {
-                let root = HTMLParser.parse(res);
-                let links = [];
-                root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
-                // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 31, -1);
+        // return new Promise((resolve, reject) => request(ARCH)
+        //     .then(res => {
+        //         let root = HTMLParser.parse(res);
+        //         let links = [];
+        //         root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
+        //         // return links.slice(links.length - 6, -1);
+        //         return links.slice(links.length - 6, -1);
+        //     })
+        //     .then(async archLinks => {
+        //         let links = [];
+        //         await Promise.map(archLinks, archLink => request(BASE_URL + archLink)
+        //             .then(res => {
+        //                 let root = HTMLParser.parse(res);
+        //                 let threads = Array.from(root.querySelectorAll(".box-data a"));
+        //                 // threads.filter(link => (link.text.toLowerCase().includes("webm") && !link.text.toLowerCase().includes("музыкальный")) || link.text.toLowerCase().includes('tik tok')).forEach(t => console.log(t.text))
+        //                 threads
+        //                     .filter(link => link.text.toLowerCase().includes('webm') || link.text.toLowerCase().includes('tik tok') || link.text.toLowerCase().includes('tiktok'))
+        //                     .filter(link => !link.text.toLowerCase().includes('музыкальный') && !link.text.toLowerCase().includes('music') && !link.text.toLowerCase().includes('war') && !link.text.toLowerCase().includes('dark') && !link.text.toLowerCase().includes('ночной'))
+        //                     .map(a => links.push(a.getAttribute("href")));
+        //             }));
+        //             // TODO
+        //             // let keywords = ['tik tok', 'mp4', 'webm', 'tiktok', 'тикток', 'тик', 'ток', 'шебм', 'цуиь', 'мп4'];
+        //             // let stopwords = ['music', 'war', 'военный', 'музыкальный'];
+        //             return links;
+        //     })
+        //     .then(module.exports.checkLinks)
+        //     .then(resolve)
+        //     .catch(error => reject(error)))
+        return new Promise((resolve, reject) => {
+            const links = []
+            fs.createReadStream(threadIdsPath)
+            .pipe(csv())
+            .on('data', row => {
+                links.push(row.threadId);
             })
-            .then(async archLinks => {
-                let links = [];
-                await Promise.map(archLinks, archLink => request(BASE_URL + archLink)
-                    .then(res => {
-                        let root = HTMLParser.parse(res);
-                        let threads = Array.from(root.querySelectorAll(".box-data a"));
-                        // threads.filter(link => (link.text.toLowerCase().includes("webm") && !link.text.toLowerCase().includes("музыкальный")) || link.text.toLowerCase().includes('tik tok')).forEach(t => console.log(t.text))
-                        threads
-                            .filter(link => link.text.toLowerCase().includes('webm') || link.text.toLowerCase().includes('tik tok') || link.text.toLowerCase().includes('tiktok'))
-                            .filter(link => !link.text.toLowerCase().includes('музыкальный') && !link.text.toLowerCase().includes('music') && !link.text.toLowerCase().includes('war') && !link.text.toLowerCase().includes('dark') && !link.text.toLowerCase().includes('ночной'))
-                            .map(a => links.push(a.getAttribute("href")));
-                    }));
-                    // TODO
-                    // let keywords = ['tik tok', 'mp4', 'webm', 'tiktok', 'тикток', 'тик', 'ток', 'шебм', 'цуиь', 'мп4'];
-                    // let stopwords = ['music', 'war', 'военный', 'музыкальный'];
-                return links;
+            .on('end', () => {
+                console.log(links);
+                return resolve(links);
             })
-            .then(module.exports.checkLinks)
-            .then(resolve)
-            .catch(error => reject(error)))
+            .on('error', (error) => reject(error));
+        })
     },
     checkLinks: (links) => {
         return new Promise((resolve, reject) => {
