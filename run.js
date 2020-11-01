@@ -60,16 +60,20 @@ async function sendVideo(video, time = 0) {
                 console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
                 await sendVideo(video);
             } else {
-                console.log(ERR_COLOR, `${error.response.description}`);
+                console.log(ERR_COLOR, `OOPSIE DAISY ${error.response.description}`); // может тута
                 logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
             }
         }));
 }
+
 function run() {
     let counter = 0;
     const date = moment().format('DD-MM');
     let interval;
     clearFailedLog();
+    process.on('unhandledRejection', (reason, promise) => {
+        console.warn('Unhandled promise rejection:', promise, 'reason:', reason.stack || reason);
+    });
     return getThreadLinks()
         .then(getMediaLinks)
         .then(async mediaLinks => {            
@@ -93,10 +97,10 @@ function run() {
                 tasks.push(new Promise((resolve, reject) => {
                     return Promise.map(filteredLinks.webm, link => checkFileSize(link)
                         .then(link => downloadMemes(link)
-                                .then(file => convert(file.path, file.name))
+                                .then(file => convert(file.path, file.name), error => reject(error))
                                 .then(filePath => checkExistsWithTimeout(filePath))
                                 .then(filePath => sendVideo({source: filePath}))
-                                .catch(error => console.log(ERR_COLOR, error)),
+                                .catch(error => console.log(ERR_COLOR, `OPANA ${error}`)), // может тута
                             error => console.log(WARN_COLOR, error))
                         , {concurrency: 3}).then(() => resolve(), error => reject(error));
                 }));

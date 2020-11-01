@@ -47,7 +47,7 @@ module.exports = {
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
                 // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 31, -1);
+                return links.slice(links.length - 6);
             })
             .then(async archLinks => {
                 let links = [];
@@ -71,6 +71,7 @@ module.exports = {
             .catch(error => reject(error)))
     },
     checkLinks: (links) => {
+        console.log(links)
         return new Promise((resolve, reject) => {
             fs.createReadStream(threadArchivePath)
             .pipe(csv())
@@ -82,6 +83,7 @@ module.exports = {
                 })
             })
             .on('end', () => {
+                console.log(links)
                 return resolve(links);
             })
             .on('error', (error) => reject(error));
@@ -190,7 +192,8 @@ module.exports = {
                         console.log(GOOD_COLOR, `File ${fileName} was downloaded`);
                         return resolve({path: filePath, name: fileName});
                     });
-    })},
+    })
+    },
     checkFileSize: (link) => {
         var maxSize = 15728640;
         return new Promise((resolve, reject) => request(link, {method: 'HEAD'})
