@@ -18,6 +18,9 @@ const TOKEN = CHANNEL.token;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
 const moment = require('moment');
+const { resolve, reject } = require('bluebird');
+const { link } = require('fs');
+const { errorMonitor } = require('stream');
 const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH9YIR85w)';
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
@@ -60,17 +63,14 @@ async function sendVideo(video, time = 0) {
                 console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
                 await sendVideo(video);
             } else {
-                console.log(ERR_COLOR, `OOPSIE DAISY ${error.response.description}`); // может тута
+                console.log(ERR_COLOR, error.response.description); // может тута
                 logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
             }
         }));
 }
 
 function run() {
-    let counter = 0;
     const date = moment().format('DD-MM');
-    let interval;
-    clearFailedLog();
     process.on('unhandledRejection', (reason, promise) => {
         console.warn('Unhandled promise rejection:', promise, 'reason:', reason.stack || reason);
     });
@@ -79,12 +79,6 @@ function run() {
         .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
-            
-            // постим сообщение каждые 10 мин для навигации
-            interval = setInterval(async () => {
-                counter++;
-                await sendMessage(`${date} ${counter}`)
-            }, 600000) // 600000
 
             // льем каждый тред отдельно
             for (const threadId in mediaLinks) {
@@ -92,52 +86,35 @@ function run() {
                 console.log(`Uploading thread ${threadId}`);
                 let filteredLinks = filterLinks(mediaLinks[threadId]);
                 let tasks = [];
-                
-                // обрабатываем вебм
                 tasks.push(new Promise((resolve, reject) => {
+                    // разделить на разные задачи закачку и конвертацию ВЕБМов
+                    // так как поточное выполнение этих задач занимает слишком много времени
+
                     return Promise.map(filteredLinks.webm, link => checkFileSize(link)
-                        .then(link => downloadMemes(link)
-                                .then(file => convert(file.path, file.name), error => reject(error))
-                                .then(filePath => checkExistsWithTimeout(filePath))
-                                .then(filePath => sendVideo({source: filePath}))
-                                .catch(error => console.log(ERR_COLOR, `OPANA ${error}`)), // может тута
-                            error => console.log(WARN_COLOR, error))
-                        , {concurrency: 3}).then(() => resolve(), error => reject(error));
-                }));
+                            .then(link => downloadMemes(link))
+                            .then(file => convert(file.path, file.name))
+                            .then(filePath => checkExistsWithTimeout(filePath))
+                            .then(filePath => sendVideo({source: filePath}))
+                            .catch(error => console.log(ERR_COLOR, `WEBM ERROR ${error}`)),
+                        {concurrency: 10}).then(resolve,reject);
+                }).catch(error => error.description.includes('socket') ? reject(error) : console.log(error.description)));
 
                 // обрабатываем mp4
                 tasks.push(new Promise((resolve, reject) => {
                     return new Promise.map(filteredLinks.mp4, link => checkFileSize(link)
-                        .then(link => sendVideo(link), error => console.log(WARN_COLOR, error))
-                        .catch(error => reject(error))
+                        .then(link => sendVideo(link))
+                        .catch(error => console.log(WARN_COLOR, `MP4 ERROR ${error}`))
                     , {concurrency: 5}).then(() => resolve(), error => reject(error));
                 }));
                 await Promise.all(tasks).then(() => saveLink(threadId)).catch(error => console.log(WARN_COLOR, error));
             }
         })
-        // .then(() => getFailedVideos())
-        // .then((failedVideos) => {
-        //     const tasks = [];
-        //     tasks.push(new Promise((resolve, reject) => {
-        //         return Promise.map(failedVideos.links, link => {
-        //             return downloadMemes(link)
-        //                 .then((file) => convert(file.path, file.name))
-        //                 .then((filePath) => sendVideo({source: filePath}))
-        //                 .catch(error => console.log(ERR_COLOR, error))
-        //         }, {concurrency: 5})
-        //             .then(() => resolve(), error => reject(error));;
-        //     }));
-        //     tasks.push(new Promise(async (resolve, reject) => {
-        //         return Promise.map(failedVideos.files, file => sendVideo({source: file}), {concurrency: 5})
-        //             .then(() => resolve(), error => reject(error));
-        //     }))
-        //     return Promise.all(tasks);
-        // })
         .then(() => {
             clearInterval(interval);
             console.log("Finished after %ds", (process.hrtime(hrstart))[0]);
             process.exit(0);
-        });
+        })
+        .catch(error => console.log(error));
 }
 
 run();

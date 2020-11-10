@@ -113,7 +113,6 @@ module.exports = {
                     var root = HTMLParser.parse(res);
                     var links = root.querySelectorAll(linkSelector);
                     links.forEach(link => {
-                        // mediaLinks.push(link.getAttribute('href'));
                         mediaLinks[threadLink].push(`${BASE_URL}${link.getAttribute('href')}`);
                     });
                 },
@@ -171,7 +170,7 @@ module.exports = {
      * 
      * @return {Promise} {filePath: string, fileName: string}
      */
-    downloadMemes: async (link) => {
+    downloadMemes: (link) => {
         // create folder for memes
         const date = moment().format('YYYY-MM-DD');
         const memeFolder = date;        
@@ -182,25 +181,25 @@ module.exports = {
                 let fileName = link.slice(-19);
                 let filePath = `${memeFolder}/${fileName}`;
                 let file = fs.createWriteStream(filePath);
-                return request(link)
+                return request(link, {headers: {Connection: 'keep-alive'}})
                     .pipe(file)
                     .on('error', (error) => {
                         console.log(ERR_COLOR, error);
                         return reject(error);
                     })
-                    .on('finish', async () => {
+                    .on('finish', () => {
                         console.log(GOOD_COLOR, `File ${fileName} was downloaded`);
                         return resolve({path: filePath, name: fileName});
                     });
-    })
+    }).catch(error => reject(error));
     },
     checkFileSize: (link) => {
         var maxSize = 15728640;
-        return new Promise((resolve, reject) => request(link, {method: 'HEAD'})
+        return new Promise((resolve, reject) => request(link, {method: 'HEAD', headers: {Connection: 'keep-alive'}})
             .then(res => {
                 var size = res['content-length'];
                 return size > maxSize ? reject(`${link} is too large`) : resolve(link);
-            })
-            .catch(error => reject(error)));
+            }))
+            .catch(error => console.log(error));
     }
 }
