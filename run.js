@@ -26,7 +26,7 @@ const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 
-const CHANNEL_ID = CHANNEL.test;
+const CHANNEL_ID = CHANNEL.id;
 
 let currentThreadId;
 
