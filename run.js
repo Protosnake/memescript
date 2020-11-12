@@ -26,8 +26,9 @@ const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 
-const CHANNEL_ID = CHANNEL.id;
+const CHANNEL_ID = CHANNEL.test;
 
+let currentThreadId;
 
 const hrstart = process.hrtime();
 
@@ -54,17 +55,14 @@ async function sendVideo(video, time = 0) {
             if (error.response.error_code === 429) {
                 console.log(WARN_COLOR, error.response.description);
                 let retry_after = error.response.parameters.retry_after;
-
                 // ебучие видео где-то переназначается и становится ReadStream, следственно вот 
                 if (typeof video === "object") video = backupVideo
-                
                 await sendVideo(video, retry_after * 1000);
             } else if (error.response.description.includes("no video")) {
                 console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
                 await sendVideo(video);
             } else {
                 console.log(ERR_COLOR, error.response.description); // может тута
-                logFailure(typeof video === 'object' ? video.source.path : video, ` ${error.response.error_code}: ${error.description}`);
             }
         }));
 }
@@ -79,42 +77,33 @@ function run() {
         .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);
-
             // льем каждый тред отдельно
             for (const threadId in mediaLinks) {
                 await sendMessage(`Тред номер ${threadId} за ${date}`);
+                currentThreadId = threadId;
                 console.log(`Uploading thread ${threadId}`);
-                let filteredLinks = filterLinks(mediaLinks[threadId]);
-                let tasks = [];
-                tasks.push(new Promise((resolve, reject) => {
-                    // разделить на разные задачи закачку и конвертацию ВЕБМов
-                    // так как поточное выполнение этих задач занимает слишком много времени
-
-                    return Promise.map(filteredLinks.webm, link => checkFileSize(link)
-                            .then(link => downloadMemes(link))
-                            .then(file => convert(file.path, file.name))
-                            .then(filePath => checkExistsWithTimeout(filePath))
-                            .then(filePath => sendVideo({source: filePath}))
-                            .catch(error => console.log(ERR_COLOR, `WEBM ERROR ${error}`)),
-                        {concurrency: 10}).then(resolve,reject);
-                }).catch(error => error.description.includes('socket') ? reject(error) : console.log(error.description)));
-
-                // обрабатываем mp4
-                tasks.push(new Promise((resolve, reject) => {
-                    return new Promise.map(filteredLinks.mp4, link => checkFileSize(link)
-                        .then(link => sendVideo(link))
-                        .catch(error => console.log(WARN_COLOR, `MP4 ERROR ${error}`))
-                    , {concurrency: 5}).then(() => resolve(), error => reject(error));
-                }));
-                await Promise.all(tasks).then(() => saveLink(threadId)).catch(error => console.log(WARN_COLOR, error));
+                // let filteredLinks = filterLinks(mediaLinks[threadId]);
+                // let tasks = [];
+                
+                await Promise.map(mediaLinks[threadId], link => checkFileSize(link)
+                    .then(async link => {
+                        if(link.includes('webm')) {
+                            await downloadMemes(link)
+                                .then(file => convert(file.path, file.name))
+                                .then(filePath => checkExistsWithTimeout(filePath))
+                                .then(filePath => sendVideo({source: filePath}))
+                        } else {
+                            await sendVideo(link).catch(error => console.log(ERR_COLOR, error));
+                        }
+                    }).catch(error => console.log(ERR_COLOR, error)), 
+                {concurrency: 15}).then(() => saveLink(threadId));
             }
         })
         .then(() => {
-            clearInterval(interval);
             console.log("Finished after %ds", (process.hrtime(hrstart))[0]);
             process.exit(0);
         })
-        .catch(error => console.log(error));
+        .catch(error => console.log(ERR_COLOR, error));
 }
 
 run();

@@ -1,11 +1,12 @@
 const request = require('request-promise');
+const syncRequest = require('request');
 const HTMLParser = require('node-html-parser');
-// const fs = require('fs');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const moment = require('moment');
 const csv = require('csv-parser');
 const csvWriter = require('csv-write-stream');
+const { resolve, reject } = require('bluebird');
 
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
@@ -47,7 +48,7 @@ module.exports = {
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
                 // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 6);
+                return links.slice(links.length - 6, -1);
             })
             .then(async archLinks => {
                 let links = [];
@@ -71,7 +72,6 @@ module.exports = {
             .catch(error => reject(error)))
     },
     checkLinks: (links) => {
-        console.log(links)
         return new Promise((resolve, reject) => {
             fs.createReadStream(threadArchivePath)
             .pipe(csv())
@@ -83,7 +83,6 @@ module.exports = {
                 })
             })
             .on('end', () => {
-                console.log(links)
                 return resolve(links);
             })
             .on('error', (error) => reject(error));
@@ -181,25 +180,34 @@ module.exports = {
                 let fileName = link.slice(-19);
                 let filePath = `${memeFolder}/${fileName}`;
                 let file = fs.createWriteStream(filePath);
-                return request(link, {headers: {Connection: 'keep-alive'}})
+                return syncRequest(link, {headers: {'Connection': 'keep-alive'}})
+                    .on('error', error => reject(error))
                     .pipe(file)
                     .on('error', (error) => {
                         console.log(ERR_COLOR, error);
+                        return reject(error);
+                    })
+                    .on('timeout', error => {
+                        console.log(`TIMEOUT ${error}`);
                         return reject(error);
                     })
                     .on('finish', () => {
                         console.log(GOOD_COLOR, `File ${fileName} was downloaded`);
                         return resolve({path: filePath, name: fileName});
                     });
-    }).catch(error => reject(error));
+    }).catch(error => console.log(`DOWNLOAD MEMES ERROR: ${error}`))
     },
     checkFileSize: (link) => {
         var maxSize = 15728640;
-        return new Promise((resolve, reject) => request(link, {method: 'HEAD', headers: {Connection: 'keep-alive'}})
-            .then(res => {
+        return new Promise((resolve, reject) => syncRequest(link, {method: 'HEAD', headers: {'Connection': 'keep-alive'}})
+            .on('error', error => {
+                console.log(`CHECK SIZE ERROR: ${error}`);
+                return reject(error);
+            })
+            .on('response', res => {
                 var size = res['content-length'];
                 return size > maxSize ? reject(`${link} is too large`) : resolve(link);
             }))
-            .catch(error => console.log(error));
+
     }
 }
