@@ -28,8 +28,6 @@ const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 
 const CHANNEL_ID = CHANNEL.id;
 
-let currentThreadId;
-
 const hrstart = process.hrtime();
 
 async function sendMessage(text, time = 0) {
@@ -80,11 +78,9 @@ function run() {
             // льем каждый тред отдельно
             for (const threadId in mediaLinks) {
                 await sendMessage(`Тред номер ${threadId} за ${date}`);
-                currentThreadId = threadId;
                 console.log(`Uploading thread ${threadId}`);
                 // let filteredLinks = filterLinks(mediaLinks[threadId]);
                 // let tasks = [];
-                
                 await Promise.map(mediaLinks[threadId], link => checkFileSize(link)
                     .then(async link => {
                         if(link.includes('webm')) {
@@ -92,7 +88,7 @@ function run() {
                                 .then(file => convert(file.path, file.name))
                                 .then(filePath => checkExistsWithTimeout(filePath))
                                 .then(filePath => sendVideo({source: filePath}))
-                        } else {
+                        } else if(link.includes('mp4')) {
                             await sendVideo(link).catch(error => console.log(ERR_COLOR, error));
                         }
                     }).catch(error => console.log(ERR_COLOR, error)), 
