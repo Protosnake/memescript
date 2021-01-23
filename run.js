@@ -92,7 +92,7 @@ function run() {
                             await sendVideo(link).catch(error => console.log(ERR_COLOR, error));
                         }
                     }).catch(error => console.log(ERR_COLOR, error)), 
-                {concurrency: 15}).then(() => saveLink(threadId));
+                {concurrency: 10}).then(() => saveLink(threadId));
             }
         })
         .then(() => {
