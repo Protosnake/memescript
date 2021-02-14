@@ -16,7 +16,7 @@ function run() {
             if (row['name'].includes('Пополнение с карты ****1321')) investment += parseInt(row['amount'])
             else ad_revenue += parseInt(row['amount']);
         } else if(row['+/-'] == '-') {
-            total_expenses += parseInt(row['amount']);
+            if(!(row['name'].includes('списание по операции') || row['name'].includes('банкомате'))) total_expenses += parseInt(row['amount']);
         }
     })
     .on('end', () => {
