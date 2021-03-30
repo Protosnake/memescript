@@ -48,7 +48,7 @@ module.exports = {
                 let links = [];
                 root.querySelectorAll(threadLinkSelector).forEach(link => links.push(link.getAttribute('href')));
                 // return links.slice(links.length - 6, -1);
-                return links.slice(links.length - 6, -1);
+                return links.slice(-1);
             })
             .then(async archLinks => {
                 let links = [];
