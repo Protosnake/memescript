@@ -26,6 +26,7 @@ const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
 
+
 const CHANNEL_ID = CHANNEL.id;
 
 const hrstart = process.hrtime();
@@ -59,6 +60,8 @@ async function sendVideo(video, time = 0) {
             } else if (error.response.description.includes("no video")) {
                 console.log(WARN_COLOR, `Retrying ${video.source} Reason: ${error.response.description}`)
                 await sendVideo(video);
+            } else if (error.response.description.includes('before secure')) {
+                await sendVideo(video);
             } else {
                 console.log(ERR_COLOR, error.response.description); // может тута
             }
@@ -70,8 +73,7 @@ function run() {
     process.on('unhandledRejection', (reason, promise) => {
         console.warn('Unhandled promise rejection:', promise, 'reason:', reason.stack || reason);
     });
-    return getThreadLinks()
-        .then(getMediaLinks)
+    return getMediaLinks()
         .then(async mediaLinks => {            
             // сообщаем о начале
             await sendMessage(`мемы за ${date}`);

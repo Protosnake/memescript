@@ -7,6 +7,7 @@ const moment = require('moment');
 const csv = require('csv-parser');
 const csvWriter = require('csv-write-stream');
 const { resolve, reject } = require('bluebird');
+const puppeteer = require('puppeteer');
 
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
@@ -103,28 +104,34 @@ module.exports = {
         links.forEach(link => writer.write({threadId: link}))
         writer.end();
     },
-    getMediaLinks: (threadLinks) => {
+    getMediaLinks: async () => {
         const mediaLinks = {};
-        return new Promise((resolve, reject) => {
-            return Promise.all(threadLinks.map((threadLink) => {
-                mediaLinks[threadLink] = [];
-                return request(BASE_URL + threadLink).then((res) => {
-                    var root = HTMLParser.parse(res);
-                    var links = root.querySelectorAll(linkSelector);
-                    links.forEach(link => {
-                        mediaLinks[threadLink].push(`${BASE_URL}${link.getAttribute('href')}`);
-                    });
-                },
-                err => console.log(ERR_COLOR, `Could not find media files in ${threadLink} thred due to ${err.statusCode} error code`));
-            })).then(() => {
-                let total = 0;
-                for (let i in mediaLinks) {
-                    total = total + mediaLinks[i].length;
-                }
-                console.log(`Found ${total} media files`);
-                return resolve(mediaLinks);
-            }, error => reject(error));
-        })
+        const browser = await puppeteer.launch({
+          headless: true, // false to show browser
+          defaultViewport: null,
+        });
+        const commentSelector = '.ctlg__comment';
+        const mediaLinkSelector = '.post__file-attr a';
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3419.0 Safari/537.36');
+        await page.goto(`${BASE_URL}/b/catalog.html`, {waitUntil: 'domcontentloaded'});
+        await page.waitForSelector(commentSelector);
+        await page.screenshot({ path: 'example.png'});
+
+        const links = await page.$$eval(commentSelector, els => els.filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase())).map(el => el.parentElement.parentElement.querySelector('.ctlg__img a').getAttribute('href')));
+      
+        for(link of links) {
+          await page.goto(`${BASE_URL}${link}`, {waitUntil: 'domcontentloaded'});
+          await page.waitForSelector(mediaLinkSelector);
+          mediaLinks[link] = await page.$$eval(mediaLinkSelector, (els, BASE_URL) => els.map(el => BASE_URL + el.getAttribute(['href'])).filter(link => /webm|mp4/.test(link)), BASE_URL);
+        }
+        await browser.close();
+        let total = 0;
+        for(i in mediaLinks) {
+            total = total + mediaLinks[i].length;
+        }
+        console.log(`Found ${total} media links`);
+        return mediaLinks;
     },
     clearFailedLog: () => {
         const failedLog = __dirname + '/failed.csv';
@@ -183,7 +190,7 @@ module.exports = {
                 return syncRequest(link, {headers: {'Connection': 'keep-alive'}})
                     .on('error', error => reject(error))
                     .pipe(file)
-                    .on('error', (error) => {
+                    .on('error', async (error) => {
                         console.log(ERR_COLOR, error);
                         return reject(error);
                     })
