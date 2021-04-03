@@ -1,43 +1,51 @@
-const BASE_URL = "https://2ch.hk";
-const ARCH = "https://2ch.hk/b/arch/";
-const linkSelector = 'figcaption a.desktop';
-const threadLinkSelector = "div.pager a";
-const request = require('request-promise');
-const HTMLParser = require('node-html-parser');
-// const fs = require('fs');
-const {
-  saveLinks,
-  getMediaLinks, 
-  getThreadLinks, 
-  filterLinks, 
-  downloadMemes, 
-  getFailedVideos, 
-  logFailure,
-  clearFailedLog,
-  checkFileSize,
-  saveThreads,
-  } = require('./2chClient.js');
-const Promise = require('bluebird');
-const fs = Promise.promisifyAll(require('fs'));
-const moment = require('moment');
-const ffmpeg = require('fluent-ffmpeg');
-const hrstart = process.hrtime();
-const _ = require('lodash');
-const csv = require('csv-parser');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
-const csvWriter = require('csv-write-stream');
-const { link } = require('fs');
-const threadIdsCsvPath = __dirname + '/threadIds.csv';
-const CHANNEL = require('./channelIds.js');
-const TOKEN = CHANNEL.token;
-const {convert,checkExistsWithTimeout} = require('./convert.js');
-const CHANNEL_ID = CHANNEL.test;
-const Telegram = require('telegraf/telegram');
-const { errorMonitor } = require('stream');
-const { resolve, reject } = require('bluebird');
-const telegram = new Telegram(TOKEN);
-const caption = '[Толстый движ](https://t.me/joinchat/AAAAAEhqKmKjMfH9YIR85w)';
-const WARN_COLOR = "\x1b[33m%s\x1b[0m";
-const ERR_COLOR = "\x1b[31m%s\x1b[0m";
-const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
+const puppeteer = require('puppeteer');
 
+// async function run() { 
+//     const browser = await puppeteer.launch({args: ['--no-sandbox', '--disable-setuid-sandbox','--proxy-server="direct://"','--proxy-bypass-list=*']});
+//     const page = await browser.newPage();
+//     await page.goto('https://2ch.hk/', {waitUntil: 'domcontentloaded'});
+//     await page.waitForTimeout(30000);
+//     // await page.waitForSelector('.pagetitle', {timeout: 60000});
+//     await page.screenshot({ path: 'example.png'});
+  
+//     await browser.close();
+//     return;
+// }
+
+// run();
+
+
+// resource: http://ktkr3d.github.io/2020/01/27/Puppeteer-on-WSL/
+
+// install puppeteer
+// > npm i -g puppeteer
+
+// use chrome from windows: add this to ~/.profile
+// PATH=/mnt/c/Program\ Files\ \(x86\)/Google/Chrome/Application:$PATH
+
+
+const USER_DATA_DIR = 'C:\\temp\\puppeteer_user_data';
+const USER_DATA_DIR_WSL = '/mnt/c/temp/puppeteer_user_data';
+
+(async function main() {
+    const browser = await puppeteer.launch({
+        executablePath: 'chrome.exe',
+        userDataDir: USER_DATA_DIR,
+        headless: false,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setViewport({
+      width: 1920,
+      height: 1080
+    });
+
+    // locate
+    await page.goto('https://www.google.com');
+
+    await page.screenshot({
+      path: 'pptr-screenshot.jpg'
+    });
+
+    await browser.close();
+})();
