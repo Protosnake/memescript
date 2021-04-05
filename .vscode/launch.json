@@ -6,7 +6,10 @@
     "program": "${workspaceFolder}/run.js",
     "request": "launch",
     "skipFiles": [
-      "<node_internals>/**"
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**",
+      "internal/**",
+      "<internal>",
     ],
     "type": "pwa-node"
   },
@@ -15,7 +18,9 @@
     "program": "${workspaceFolder}/test.js",
     "request": "launch",
     "skipFiles": [
-      "<node_internals>/**"
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**/*.js",
+      "<internal>",
     ],
     "type": "pwa-node"
   },

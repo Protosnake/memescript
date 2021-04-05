@@ -13,7 +13,6 @@ const {convert, checkExistsWithTimeout} = require('./convert.js');
 const CHANNEL = require('./channelIds.js');
 const Promise = require('bluebird');
 const _ = require('lodash');
-const fs = Promise.promisifyAll(require('fs'));
 const TOKEN = CHANNEL.token;
 const Telegram = require('telegraf/telegram');
 const telegram = new Telegram(TOKEN);
@@ -68,7 +67,7 @@ async function sendVideo(video, time = 0) {
         }));
 }
 
-function run() {
+async function run() {
     const date = moment().format('DD-MM');
     process.on('unhandledRejection', (reason, promise) => {
         console.warn('Unhandled promise rejection:', promise, 'reason:', reason.stack || reason);
@@ -81,20 +80,18 @@ function run() {
             for (const threadId in mediaLinks) {
                 await sendMessage(`Тред номер ${threadId} за ${date}`);
                 console.log(`Uploading thread ${threadId}`);
-                // let filteredLinks = filterLinks(mediaLinks[threadId]);
-                // let tasks = [];
                 await Promise.map(mediaLinks[threadId], link => checkFileSize(link)
                     .then(async link => {
                         if(link.includes('webm')) {
                             await downloadMemes(link)
-                                .then(file => convert(file.path, file.name))
+                                .then(convert)
                                 .then(filePath => checkExistsWithTimeout(filePath))
                                 .then(filePath => sendVideo({source: filePath}))
                         } else if(link.includes('mp4')) {
                             await sendVideo(link).catch(error => console.log(ERR_COLOR, error));
                         }
                     }).catch(error => console.log(ERR_COLOR, error)), 
-                {concurrency: 10}).then(() => saveLink(threadId));
+                {concurrency: 5}).then(() => saveLink(threadId));
             }
         })
         .then(() => {
@@ -104,4 +101,8 @@ function run() {
         .catch(error => console.log(ERR_COLOR, error));
 }
 
-run();
+async function main() {
+    await run();
+}
+
+main();

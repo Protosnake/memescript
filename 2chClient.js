@@ -1,14 +1,11 @@
 const request = require('request-promise');
 const syncRequest = require('request');
 const HTMLParser = require('node-html-parser');
-const Promise = require('bluebird');
-const fs = Promise.promisifyAll(require('fs'));
 const moment = require('moment');
 const csv = require('csv-parser');
 const csvWriter = require('csv-write-stream');
-const { resolve, reject } = require('bluebird');
 const puppeteer = require('puppeteer');
-
+const fs = require('fs');
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
@@ -110,15 +107,23 @@ module.exports = {
           headless: true, // false to show browser
           defaultViewport: null,
         });
-        const commentSelector = '.ctlg__comment';
+        const threadSelector = 'div.box-data a';
         const mediaLinkSelector = '.post__file-attr a';
         const page = await browser.newPage();
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3419.0 Safari/537.36');
-        await page.goto(`${BASE_URL}/b/catalog.html`, {waitUntil: 'domcontentloaded'});
-        await page.waitForSelector(commentSelector);
-        await page.screenshot({ path: 'example.png'});
+        await page.goto(`${BASE_URL}/b/arch/`, {waitUntil: 'domcontentloaded'});
 
-        const links = await page.$$eval(commentSelector, els => els.filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase())).map(el => el.parentElement.parentElement.querySelector('.ctlg__img a').getAttribute('href')));
+        await page.waitForSelector(threadSelector);
+
+        const cookies = await page.cookies();
+        global.cookie = `${cookies[0].name}=${cookies[0].value}`;
+        const links = await page.$$eval(threadSelector, 
+            els => els
+                .filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase()))
+                .filter(el => !(/музыкальный|dark/.test(el.textContent.toLowerCase())))
+                .map(el => el.getAttribute('href'))
+        );
+        // const links = await page.$$eval(commentSelector, els => els.filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase())).map(el => el.parentElement.parentElement.querySelector('.ctlg__img a').getAttribute('href')));
       
         for(link of links) {
           await page.goto(`${BASE_URL}${link}`, {waitUntil: 'domcontentloaded'});
@@ -130,7 +135,7 @@ module.exports = {
         for(i in mediaLinks) {
             total = total + mediaLinks[i].length;
         }
-        console.log(`Found ${total} media links`);
+        console.log(`Found ${total} media links in ${Object.keys(mediaLinks).length} threads`);
         return mediaLinks;
     },
     clearFailedLog: () => {
@@ -176,21 +181,39 @@ module.exports = {
      * 
      * @return {Promise} {filePath: string, fileName: string}
      */
-    downloadMemes: (link) => {
+    downloadMemes: async (link) => {
         // create folder for memes
         const date = moment().format('YYYY-MM-DD');
         const memeFolder = date;        
         if (!fs.existsSync(memeFolder)) {
             fs.mkdirSync(memeFolder);
         }
+
+        const options = {
+            'method': 'GET',
+            'headers': {
+              'Connection': 'keep-alive',
+              'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="90"',
+              'sec-ch-ua-mobile': '?0',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3419.0 Safari/537.36',
+              'Accept': '*/*',
+              'Sec-Fetch-Site': 'same-origin',
+              'Sec-Fetch-Mode': 'no-cors',
+              'Sec-Fetch-Dest': 'video',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Cookie': global.cookie,
+              'Range': 'bytes=0-'
+            }
+          };
+        
         return new Promise((resolve, reject) => {
                 let fileName = link.slice(-19);
                 let filePath = `${memeFolder}/${fileName}`;
                 let file = fs.createWriteStream(filePath);
-                return syncRequest(link, {headers: {'Connection': 'keep-alive'}})
+                return syncRequest(link, options)
                     .on('error', error => reject(error))
                     .pipe(file)
-                    .on('error', async (error) => {
+                    .on('error', (error) => {
                         console.log(ERR_COLOR, error);
                         return reject(error);
                     })
@@ -209,6 +232,7 @@ module.exports = {
         return new Promise((resolve, reject) => syncRequest(link, {method: 'HEAD', headers: {'Connection': 'keep-alive'}})
             .on('error', error => {
                 console.log(`CHECK SIZE ERROR: ${error}`);
+                if(error.code == "ECONNRESET") module.exports.checkFileSize(link);
                 return reject(error);
             })
             .on('response', res => {
