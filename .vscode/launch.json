@@ -24,5 +24,16 @@
     ],
     "type": "pwa-node"
   },
+  {
+    "name": "scraper",
+    "program": "${workspaceFolder}/scraper.js",
+    "request": "launch",
+    "skipFiles": [
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**/*.js",
+      "<internal>",
+    ],
+    "type": "pwa-node"
+  },
   ]
 }

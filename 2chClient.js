@@ -104,7 +104,7 @@ module.exports = {
     getMediaLinks: async () => {
         const mediaLinks = {};
         const browser = await puppeteer.launch({
-          headless: true, // false to show browser
+          headless: false, // false to show browser
           defaultViewport: null,
         });
         const threadSelector = 'div.box-data a';
@@ -115,8 +115,7 @@ module.exports = {
 
         await page.waitForSelector(threadSelector);
 
-        const cookies = await page.cookies();
-        global.cookie = `${cookies[0].name}=${cookies[0].value}`;
+
         const links = await page.$$eval(threadSelector, 
             els => els
                 .filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase()))
@@ -130,6 +129,8 @@ module.exports = {
           await page.waitForSelector(mediaLinkSelector);
           mediaLinks[link] = await page.$$eval(mediaLinkSelector, (els, BASE_URL) => els.map(el => BASE_URL + el.getAttribute(['href'])).filter(link => /webm|mp4/.test(link)), BASE_URL);
         }
+        // const cookies = await page.cookies();
+        // global.cookie = `${cookies[0].name}=${cookies[0].value}`;
         await browser.close();
         let total = 0;
         for(i in mediaLinks) {
