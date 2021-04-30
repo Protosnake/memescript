@@ -1,17 +1,15 @@
 const request = require('request-promise');
 const syncRequest = require('request');
 const HTMLParser = require('node-html-parser');
-const Promise = require('bluebird');
-const fs = Promise.promisifyAll(require('fs'));
 const moment = require('moment');
 const csv = require('csv-parser');
 const csvWriter = require('csv-write-stream');
-const { resolve, reject } = require('bluebird');
-
+const puppeteer = require('puppeteer');
+const fs = require('fs');
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
-const threadLinkSelector = "div.pager a";
+const archPagesSelector = "div.pager a";
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
@@ -103,28 +101,46 @@ module.exports = {
         links.forEach(link => writer.write({threadId: link}))
         writer.end();
     },
-    getMediaLinks: (threadLinks) => {
+    getMediaLinks: async () => {
         const mediaLinks = {};
-        return new Promise((resolve, reject) => {
-            return Promise.all(threadLinks.map((threadLink) => {
-                mediaLinks[threadLink] = [];
-                return request(BASE_URL + threadLink).then((res) => {
-                    var root = HTMLParser.parse(res);
-                    var links = root.querySelectorAll(linkSelector);
-                    links.forEach(link => {
-                        mediaLinks[threadLink].push(`${BASE_URL}${link.getAttribute('href')}`);
-                    });
-                },
-                err => console.log(ERR_COLOR, `Could not find media files in ${threadLink} thred due to ${err.statusCode} error code`));
-            })).then(() => {
-                let total = 0;
-                for (let i in mediaLinks) {
-                    total = total + mediaLinks[i].length;
-                }
-                console.log(`Found ${total} media files`);
-                return resolve(mediaLinks);
-            }, error => reject(error));
-        })
+        const browser = await puppeteer.launch({
+          headless: false, // false to show browser
+          defaultViewport: null,
+        });
+        const threadSelector = 'div.box-data a';
+        const mediaLinkSelector = '.post__file-attr a';
+        const page = await browser.newPage();
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3419.0 Safari/537.36');
+        await page.goto(`${BASE_URL}/b/arch/`, {waitUntil: 'domcontentloaded'});
+
+        await page.waitForSelector(threadSelector);
+
+        let archPages = await page.$$eval(archPagesSelector, ps => ps.slice(ps.length - 5).map(p => p.getAttribute('href')));
+        let links = [];
+        for(archPage of archPages) {
+            await page.goto(`${BASE_URL}${archPage}`);
+            var newLinks = await page.$$eval(threadSelector, 
+                els => els
+                    .filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase()))
+                    .filter(el => !(/музыкальный|dark/.test(el.textContent.toLowerCase())))
+                    .map(el => el.getAttribute('href'))
+            );
+            links = [...links, ...newLinks];
+        }      
+        for(link of links) {
+          await page.goto(`${BASE_URL}${link}`, {waitUntil: 'domcontentloaded'});
+          await page.waitForSelector(mediaLinkSelector);
+          mediaLinks[link] = await page.$$eval(mediaLinkSelector, (els, BASE_URL) => els.map(el => BASE_URL + el.getAttribute(['href'])).filter(link => /webm|mp4/.test(link)), BASE_URL);
+        }
+        // const cookies = await page.cookies();
+        // global.cookie = `${cookies[0].name}=${cookies[0].value}`;
+        await browser.close();
+        let total = 0;
+        for(i in mediaLinks) {
+            total = total + mediaLinks[i].length;
+        }
+        console.log(`Found ${total} media links in ${Object.keys(mediaLinks).length} threads`);
+        return mediaLinks;
     },
     clearFailedLog: () => {
         const failedLog = __dirname + '/failed.csv';
@@ -169,18 +185,36 @@ module.exports = {
      * 
      * @return {Promise} {filePath: string, fileName: string}
      */
-    downloadMemes: (link) => {
+    downloadMemes: async (link) => {
         // create folder for memes
         const date = moment().format('YYYY-MM-DD');
         const memeFolder = date;        
         if (!fs.existsSync(memeFolder)) {
             fs.mkdirSync(memeFolder);
         }
+
+        const options = {
+            'method': 'GET',
+            'headers': {
+              'Connection': 'keep-alive',
+              'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="90"',
+              'sec-ch-ua-mobile': '?0',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3419.0 Safari/537.36',
+              'Accept': '*/*',
+              'Sec-Fetch-Site': 'same-origin',
+              'Sec-Fetch-Mode': 'no-cors',
+              'Sec-Fetch-Dest': 'video',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Cookie': global.cookie,
+              'Range': 'bytes=0-'
+            }
+          };
+        
         return new Promise((resolve, reject) => {
                 let fileName = link.slice(-19);
                 let filePath = `${memeFolder}/${fileName}`;
                 let file = fs.createWriteStream(filePath);
-                return syncRequest(link, {headers: {'Connection': 'keep-alive'}})
+                return syncRequest(link, options)
                     .on('error', error => reject(error))
                     .pipe(file)
                     .on('error', (error) => {
@@ -202,6 +236,7 @@ module.exports = {
         return new Promise((resolve, reject) => syncRequest(link, {method: 'HEAD', headers: {'Connection': 'keep-alive'}})
             .on('error', error => {
                 console.log(`CHECK SIZE ERROR: ${error}`);
+                if(error.code == "ECONNRESET") module.exports.checkFileSize(link);
                 return reject(error);
             })
             .on('response', res => {

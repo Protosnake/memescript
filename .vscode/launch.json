@@ -1,11 +1,39 @@
 {
   "version": "0.2.0",
   "configurations": [
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Launch Program",
-      "program": "${workspaceFolder}/run.js",
-    }
+  {
+    "name": "run",
+    "program": "${workspaceFolder}/run.js",
+    "request": "launch",
+    "skipFiles": [
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**",
+      "internal/**",
+      "<internal>",
+    ],
+    "type": "pwa-node"
+  },
+  {
+    "name": "test",
+    "program": "${workspaceFolder}/test.js",
+    "request": "launch",
+    "skipFiles": [
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**/*.js",
+      "<internal>",
+    ],
+    "type": "pwa-node"
+  },
+  {
+    "name": "scraper",
+    "program": "${workspaceFolder}/scraper.js",
+    "request": "launch",
+    "skipFiles": [
+      "${workspaceFolder}/node_modules/**/*.js",
+      "<node_internals>/**/*.js",
+      "<internal>",
+    ],
+    "type": "pwa-node"
+  },
   ]
 }

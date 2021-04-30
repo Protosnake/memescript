@@ -2,16 +2,6 @@ const ffmpeg = require('fluent-ffmpeg');
 const Promise = require('bluebird');
 const fs = Promise.promisifyAll(require('fs'));
 const _ = require('lodash');
-const {
-    getMediaLinks, 
-    getThreadLinks, 
-    filterLinks, 
-    downloadMemes, 
-    getFailedVideos, 
-    logFailure,
-    clearFailedLog,
-    } = require('./2chClient.js');
-const { resolve, reject } = require('bluebird');
 const hbjs = require('handbrake-js');
 const request = require('request');
 const path = require('path');
@@ -52,20 +42,21 @@ module.exports = {
     //             .run();
     //     }).catch(err => console.log(err));
     // },
-    convert: (filePath, fileName) => {
+    convert: file => {
         return new Promise(async (resolve, reject) => {
-            const newFileName = `${fileName.slice(0, -5)}.mp4`;
-            const newFilePath = `${filePath.slice(0, -5)}.mp4`;
-            await hbjs.spawn({ input: filePath, output: `${filePath.slice(0, -5)}.mp4` })
+            const newFileName = `${file.name.slice(0, -5)}.mp4`;
+            const newFilePath = `${file.path.slice(0, -5)}.mp4`;
+            if (!fs.existsSync(file.path)) reject(`${file.path} doesn't exist`);
+            await hbjs.spawn({ input: file.path, output: `${file.path.slice(0, -5)}.mp4` })
                 .on('error', err => {
                     console.log(ERR_COLOR, err.message);
                     return reject(err);
                 })
                 .on('end', () => {
-                    console.log(GOOD_COLOR, `Converted ${fileName} into ${newFileName}`);
-                    fs.unlink(filePath, error => {
+                    console.log(GOOD_COLOR, `Converted ${file.name} into ${newFileName}`);
+                    fs.unlink(file.path, error => {
                         if (error) console.log(ERR_COLOR, error);
-                        console.log(GOOD_COLOR, `Removed file ${fileName}`);
+                        console.log(GOOD_COLOR, `Removed file ${file.name}`);
                     })
                     return resolve(newFilePath);
                 })
