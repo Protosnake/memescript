@@ -24,7 +24,7 @@ async function run() {
     }
 
     const browser = await puppeteer.launch({
-        headless: false, // false to show browser
+        headless: true, // false to show browser
         defaultViewport: null,
         args: [
             '--proxy-server="direct://"',
@@ -43,21 +43,21 @@ async function run() {
     await page.waitForSelector(selectors.candidate);
 
     let filters = {
-        // 'android': 'f%5B%5D=skill%3AAndroid',
-        // 'C': 'f%5B%5D=skill%3AC',
-        'C#': 'f%5B%5D=skill%3AC%23',
-        'C++': 'f%5B%5D=skill%3AC%2B%2B',
-        'GOlang': 'f%5B%5D=skill%3AGolang',
-        'iOS': 'f%5B%5D=skill%3AiOS',
-        'Java': 'f%5B%5D=skill%3AJava',
-        'JavaScript': 'f%5B%5D=skill%3AJavaScript',
-        'NodeJS': 'f%5B%5D=skill%3ANode.js',
-        'AQA': 'f%5B%5D=skill%3AQA+Engineering',
-        'React Native': 'f%5B%5D=skill%3AReact+Native',
-        'React JS': 'f%5B%5D=skill%3AReact.js',
-        'Ruby': 'f%5B%5D=skill%3ARuby',
-        'Ruby on Rail': 'f%5B%5D=skill%3ARuby+on+Rails',
-        'Unity': 'f%5B%5D=skill%3AUnity',
+        'android': 'f%5B%5D=skill%3AAndroid',
+        'C': 'f%5B%5D=skill%3AC',
+        // 'C#': 'f%5B%5D=skill%3AC%23',
+        // 'C++': 'f%5B%5D=skill%3AC%2B%2B',
+        // 'GOlang': 'f%5B%5D=skill%3AGolang',
+        // 'iOS': 'f%5B%5D=skill%3AiOS',
+        // 'Java': 'f%5B%5D=skill%3AJava',
+        // 'JavaScript': 'f%5B%5D=skill%3AJavaScript',
+        // 'NodeJS': 'f%5B%5D=skill%3ANode.js',
+        // 'AQA': 'f%5B%5D=skill%3AQA+Engineering',
+        // 'React Native': 'f%5B%5D=skill%3AReact+Native',
+        // 'React JS': 'f%5B%5D=skill%3AReact.js',
+        // 'Ruby': 'f%5B%5D=skill%3ARuby',
+        // 'Ruby on Rail': 'f%5B%5D=skill%3ARuby+on+Rails',
+        // 'Unity': 'f%5B%5D=skill%3AUnity',
     }
     
     for (const filter in filters) {

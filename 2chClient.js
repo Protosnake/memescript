@@ -9,7 +9,7 @@ const fs = require('fs');
 const BASE_URL = "https://2ch.hk";
 const ARCH = "https://2ch.hk/b/arch/";
 const linkSelector = 'figcaption a.desktop';
-const threadLinkSelector = "div.pager a";
+const archPagesSelector = "div.pager a";
 const WARN_COLOR = "\x1b[33m%s\x1b[0m";
 const ERR_COLOR = "\x1b[31m%s\x1b[0m";
 const GOOD_COLOR = "\x1b[32m%s\x1b[0m";
@@ -115,15 +115,18 @@ module.exports = {
 
         await page.waitForSelector(threadSelector);
 
-
-        const links = await page.$$eval(threadSelector, 
-            els => els
-                .filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase()))
-                .filter(el => !(/музыкальный|dark/.test(el.textContent.toLowerCase())))
-                .map(el => el.getAttribute('href'))
-        );
-        // const links = await page.$$eval(commentSelector, els => els.filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase())).map(el => el.parentElement.parentElement.querySelector('.ctlg__img a').getAttribute('href')));
-      
+        let archPages = await page.$$eval(archPagesSelector, ps => ps.slice(ps.length - 5).map(p => p.getAttribute('href')));
+        let links = [];
+        for(archPage of archPages) {
+            await page.goto(`${BASE_URL}${archPage}`);
+            var newLinks = await page.$$eval(threadSelector, 
+                els => els
+                    .filter(el => /webm|tik tok|mp4|tiktok|тик ток|цуиь|тикток|mp4/.test(el.textContent.toLowerCase()))
+                    .filter(el => !(/музыкальный|dark/.test(el.textContent.toLowerCase())))
+                    .map(el => el.getAttribute('href'))
+            );
+            links = [...links, ...newLinks];
+        }      
         for(link of links) {
           await page.goto(`${BASE_URL}${link}`, {waitUntil: 'domcontentloaded'});
           await page.waitForSelector(mediaLinkSelector);
